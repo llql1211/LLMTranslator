@@ -1,8 +1,3 @@
-# 使用部署于 Ollama 的本地大模型，将选中文本翻译成特定语言 
-# 平台：Windows 11 可用，Linux 未验证
-# 下面的 bug 似乎被修好了！
-# （之前出现的 bug：从第二次翻译开始，热键注册异常。翻译热键仅需要 Shift 键，且要按 2 次；显示“等待按键中...”时并未进入监听状态）
-
 import threading
 import time
 import pyautogui
@@ -24,18 +19,20 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL_NAME = "HY-MT1.5-1.8B-Q8_0:latest"
 # 目标语言
 TARGET_LANG = "Chinese"
+# Prompt（注意：此 Prompt 专门适配模型 "HY-MT1.5-1.8B-Q8_0"，其他模型可能需要调整）
+PROMPT_TEMPLATE = f"<｜hy_begin▁of▁sentence｜>你是一个翻译助手，专门将输入的文本翻译成{TARGET_LANG}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{{input_text}}<｜hy_Assistant｜>"
 # 翻译与退出热键
 HOTKEY_TRANSLATE = '<ctrl>+<shift>+e'
 HOTKEY_QUIT = '<ctrl>+<shift>+q'
 # 是否在获取选中文本后恢复剪切板内容
 RESTORE_CLIPBOARD = False
 
+# 若要修改请求体 payload 内容，请 Ctrl+F 搜索 payload
+
 # ================
 # 默认配置项
 # ================
 
-# Prompt
-PROMPT_TEMPLATE = f"<｜hy_begin▁of▁sentence｜>你是一个翻译助手，专门将输入的文本翻译成{TARGET_LANG}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{{input_text}}<｜hy_Assistant｜>"
 # 文本框背景颜色
 BACKGROUND_COLOR = '#FFFFE0'
 # 文本框相对鼠标向右下偏移量（像素）
