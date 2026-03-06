@@ -49,7 +49,7 @@ The program uses `pynput` to listen for shortcut keys, triggering the translatio
     访问 [Ollama 官网](https://ollama.com) 下载并安装对应系统的版本。
 
 2. **下载翻译模型文件**  
-    从模型仓库（如 [Hugging Face](https://huggingface.co/models) 或 [镜像站](https://hf-mirror.com/models)）下载翻译模型，推荐使用 **GGUF** 格式（轻量、适合个人电脑）或 **Safetensors** 格式。
+    从模型仓库（如 [Hugging Face](https://huggingface.co/models) 或 [镜像站](https://hf-mirror.com/models)）下载翻译模型，推荐使用 **GGUF** 格式（轻量、适合个人电脑）或 **Safetensors** 格式。  
     **说明**：本代码使用模型 `HY-MT1.5-1.8B-Q8_0:latest`，并内置了**与之相配套的 prompt**，因此推荐下载该模型。
 
 3. **创建 Modelfile**  
@@ -83,11 +83,11 @@ The program uses `pynput` to listen for shortcut keys, triggering the translatio
 - **模型名称**  
   填写上一步构建的模型名称，推荐加上 `:latest` 标签，如 `my-translator:latest`。
 
-- **提示词 prompt**
-  若使用的模型与默认模型 `HY-MT1.5-1.8B-Q8_0:latest` 不同，需要修改 promt。
+- **提示词 prompt**  
+  若使用的模型与默认模型 `HY-MT1.5-1.8B-Q8_0:latest` 不同，需要修改 prompt。
 
-- **请求体 payload 内容**
-  若使用 Ollama 翻译，通常无需修改。
+- **请求体 payload 内容**  
+  若使用 Ollama 翻译，通常无需修改。  
   若需要调用其他 API（如 OpenAI API），需要修改请求体 payload 内容。
 
 - **热键设置**  
