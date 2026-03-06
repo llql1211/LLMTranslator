@@ -38,7 +38,7 @@ The program uses `pynput` to listen for shortcut keys, triggering the translatio
 - **Linux**：部分支持，具体依赖项如下（由 DeepSeek 生成，请谨慎甄别）：
 
 | 库 | 支持情况 | 详情 |
-| :----: | :----: | :---- |
+| :----: | :----: | --- |
 | `tkinter` | 需要图形界面 | Tkinter 是 Python 标准 GUI 库，在 Linux 上需安装 `python3-tk` 包，且系统需运行 X11 或 Wayland 图形环境（无图形界面的服务器无法使用） |
 | `pyautogui` | 部分支持 | 用于模拟鼠标键盘操作。在 Linux 上依赖 X11 或 `uinput`，需安装 `python3-xlib`、`scrot` 等工具。若使用 Wayland，部分功能可能受限 |
 | `pynput` | 部分支持 | 用于监听和控制输入设备。同样依赖 X11 或 `uinput`，可能需要图形界面或 root 权限 |
