@@ -1,6 +1,7 @@
 {
-  "ollama": {
-    "url": "http://localhost:11434/api/generate",
+  "api": {
+    "base_url": "http://localhost:11434/api/generate",
+    "api_key": "",
     "model_name": "HY-MT1.5-1.8B-Q8_0:latest"
   },
   "translation": {

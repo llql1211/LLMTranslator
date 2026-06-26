@@ -17,8 +17,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
     config = json.load(f)
 
-OLLAMA_URL = config["ollama"]["url"]
-MODEL_NAME = config["ollama"]["model_name"]
+API_BASE_URL = config["api"]["base_url"]
+MODEL_NAME = config["api"]["model_name"]
+API_KEY = config["api"]["api_key"]
 TARGET_LANG = config["translation"]["target_lang"]
 PROMPT_TEMPLATE = config["translation"]["prompt_template"]
 HOTKEY_TRANSLATE = config["hotkeys"]["translate"]
@@ -121,29 +122,51 @@ def get_selected_text():
 
 def translate_with_llm(text):
     """
-    调用 Ollama API 翻译
-    
+    调用 LLM API 翻译
+    - api_key 为空 → Ollama 原生格式（/api/generate）
+    - api_key 非空 → OpenAI 兼容格式（/v1/chat/completions）
     报错返回空串
     """
     prompt = PROMPT_TEMPLATE.format(input_text=text)
-    payload = {
-        "model": MODEL_NAME,
-        "prompt": prompt,
-        "stream": False
-    }
-    result_text = ""
 
+    if API_KEY:
+        # OpenAI 兼容格式
+        chat_url = API_BASE_URL.rstrip("/")
+        if not chat_url.endswith("/chat/completions"):
+            chat_url = chat_url.rstrip("/v1") + "/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": MODEL_NAME,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False
+        }
+        do_request = lambda: requests.post(chat_url, json=payload, headers=headers, timeout=30)
+    else:
+        # Ollama 原生格式
+        payload = {
+            "model": MODEL_NAME,
+            "prompt": prompt,
+            "stream": False
+        }
+        do_request = lambda: requests.post(API_BASE_URL, json=payload, timeout=30)
+
+    result_text = ""
     try:
         print("-> 翻译中... ", end="")
-        response = requests.post(OLLAMA_URL, json=payload, timeout=30)
-        response.raise_for_status()  # 检查 HTTP 响应状态码
+        response = do_request()
+        response.raise_for_status()
         result = response.json()
-        if "response" in result:
-            result_text = result["response"].strip()
+        if API_KEY:
+            # OpenAI 格式：response.choices[0].message.content
+            result_text = result["choices"][0]["message"]["content"].strip()
         else:
-            print("-> 翻译失败：API 相应中缺少 'response' 字段 ")
+            # Ollama 格式：response
+            result_text = result.get("response", "").strip()
     except Exception as e:
-        print("-> 翻译失败：{e} ")
+        print(f"-> 翻译失败：{e} ")
 
     return result_text
 
