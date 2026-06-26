@@ -1,2 +1,4 @@
-*.txt
+.claude/
 .vscode/
+.pixi/*
+!.pixi/config.toml

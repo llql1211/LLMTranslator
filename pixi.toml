@@ -1,0 +1,10 @@
+[workspace]
+authors = ["llql1211 <1390116067@qq.com>"]
+channels = ["conda-forge"]
+name = "LLMTranslator"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]

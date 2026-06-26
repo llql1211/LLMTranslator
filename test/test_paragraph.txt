@@ -1,0 +1,18 @@
+Test Paragraph:
+
+A spin 1/2 particle is prepared to have a spin in the x-y plane,
+Pointing along the direction “x=y”...(see red arrow in fig)
+It has NO z component!! (It sits “flat“ in the x-y plane)
+Which is the expression (above) for this quantum state?
+
+Line Break Text Test:
+
+An apple is 
+thrown away.
+And there is a banana.
+
+The rapid advancement of technology over the past few decades has fundamentally transformed nearly every aspect of human life. 
+Among the most groundbreaking developments is artificial intelligence (AI), 
+which has evolved from a theoretical concept into a powerful tool integrated into our daily routines. 
+From voice assistants on our smartphones to recommendation algorithms on streaming platforms, AI systems are now ubiquitous, 
+often operating silently in the background to enhance user experiences and streamline complex tasks.
