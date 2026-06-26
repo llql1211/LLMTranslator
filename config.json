@@ -1,0 +1,23 @@
+{
+  "ollama": {
+    "url": "http://localhost:11434/api/generate",
+    "model_name": "HY-MT1.5-1.8B-Q8_0:latest"
+  },
+  "translation": {
+    "target_lang": "Chinese",
+    "prompt_template": "<｜hy_begin▁of▁sentence｜>你是一个翻译助手，专门将输入的文本翻译成{target_lang}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{input_text}<｜hy_Assistant｜>"
+  },
+  "hotkeys": {
+    "translate": "<ctrl>+<shift>+e",
+    "quit": "<ctrl>+<shift>+q"
+  },
+  "tooltip": {
+    "background_color": "#FFFFE0",
+    "offset_x": 20,
+    "offset_y": 20,
+    "result_max_width": 30,
+    "result_max_height": 8,
+    "duration_ms": 1500
+  },
+  "restore_clipboard": false
+}
