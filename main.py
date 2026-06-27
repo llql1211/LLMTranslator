@@ -94,16 +94,20 @@ def get_selected_text():
     """
     old_clipboard = pyperclip.paste()
     pyperclip.copy('')
-    time.sleep(0.1)  # 等待剪切板被清空
+    time.sleep(0.03)  # 等待剪切板被清空
 
     try:
+        # 先释放热键修饰键（Ctrl+Shift），确保键盘状态干净
+        KB_CONTR.release(keyboard.Key.ctrl)
+        KB_CONTR.release(keyboard.Key.shift)
+        time.sleep(0.02)
+
         # 使用 pynput 模拟 Ctrl+C
-        KB_CONTR.release(keyboard.Key.shift)  # 松开 Shift 键，防止与 Ctrl+C 冲突为 Ctrl+Shift+C
         KB_CONTR.press(keyboard.Key.ctrl)
         KB_CONTR.press('c')
         KB_CONTR.release('c')
         KB_CONTR.release(keyboard.Key.ctrl)
-        time.sleep(0.2)
+        time.sleep(0.05)
         
         new_text = clean_english_text(pyperclip.paste())
         return new_text
@@ -170,6 +174,11 @@ def translate_with_llm(text):
 
     return result_text
 
+# 全局 Tkinter 窗口，复用避免重复创建
+_TOOLTIP_ROOT = None
+_TOOLTIP_TEXT = None
+_TOOLTIP_TIMER_ID = None
+
 def show_tooltip(text, w, h, mode):
     """
     在鼠标右下角显示无边框矩形文本框（非阻塞）
@@ -180,63 +189,84 @@ def show_tooltip(text, w, h, mode):
 
     点击外部或按下 ESC 关闭
     """
-    def run():
-        x, y = pyautogui.position()  # 获取光标位置
-        
+    def safe_destroy(_event=None):
+        """安全销毁窗口（接受可选 event 参数用于 bind 回调）"""
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_TIMER_ID
+        try:
+            if _TOOLTIP_ROOT and _TOOLTIP_ROOT.winfo_exists():
+                if _TOOLTIP_TIMER_ID:
+                    _TOOLTIP_ROOT.after_cancel(_TOOLTIP_TIMER_ID)
+                    _TOOLTIP_TIMER_ID = None
+                _TOOLTIP_ROOT.destroy()
+        except tkinter.TclError:
+            pass
+        finally:
+            _TOOLTIP_ROOT = None
+            _TOOLTIP_TEXT = None
+
+    def update_or_create():
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_TIMER_ID
+
+        x, y = pyautogui.position()
+
+        if _TOOLTIP_TEXT and _TOOLTIP_ROOT and _TOOLTIP_ROOT.winfo_exists():
+            # 复用已有窗口：移动位置、更新文本
+            _TOOLTIP_ROOT.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
+            _TOOLTIP_TEXT.config(height=h, width=w)
+            _TOOLTIP_TEXT.delete(1.0, tkinter.END)
+            _TOOLTIP_TEXT.insert(tkinter.END, text)
+
+            if _TOOLTIP_TIMER_ID:
+                _TOOLTIP_ROOT.after_cancel(_TOOLTIP_TIMER_ID)
+                _TOOLTIP_TIMER_ID = None
+            if mode == "timed":
+                _TOOLTIP_TIMER_ID = _TOOLTIP_ROOT.after(TOOLTIP_DURATION, safe_destroy)
+
+            _TOOLTIP_ROOT.lift()
+            _TOOLTIP_ROOT.focus_force()
+            return
+
+        # 首次创建窗口
         root = tkinter.Tk()
-        root.overrideredirect(True)  # 移除标题栏和边框
-        root.attributes('-topmost', True)  # 置顶窗口
+        root.overrideredirect(True)
+        root.attributes('-topmost', True)
         root.configure(bg=BACKGROUND_COLOR)
-        root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")  # 向右下方偏移
-        
+        root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
+
         text_area = tkinter.Text(
             root,
-            wrap=tkinter.WORD,  # 按单词换行，避免单词被切断
+            wrap=tkinter.WORD,
             font=("Microsoft YaHei", 10),
-            width=w,  # 宽度（字符数）
-            height=h,  # 高度（行数）
+            width=w,
+            height=h,
             relief=tkinter.FLAT,
             bg=BACKGROUND_COLOR,
             fg='black',
-            insertbackground='black',  # 光标颜色
-            bd=0,  # 去掉边框
-            padx=5,  # 内边距
+            insertbackground='black',
+            bd=0,
+            padx=5,
             pady=5
         )
         text_area.pack(fill=tkinter.BOTH, expand=True)
         text_area.insert(tkinter.END, text)
 
-        timer_id = None
-        
-        # 安全销毁函数：取消定时器（若存在）并销毁窗口，避免重复销毁
-        def safe_destroy():
-            nonlocal timer_id
-            try:
-                if root.winfo_exists():
-                    if timer_id:
-                        root.after_cancel(timer_id)
-                        timer_id = None
-                    root.destroy()
-            except tkinter.TclError:
-                pass  # 窗口已不存在，忽略错误
+        _TOOLTIP_ROOT = root
+        _TOOLTIP_TEXT = text_area
+        _TOOLTIP_TIMER_ID = None
 
-        # 设置定时器，"persistent" 无需设置
+        # 定时关闭
         if mode == "timed":
-            timer_id = root.after(TOOLTIP_DURATION, safe_destroy)
+            _TOOLTIP_TIMER_ID = root.after(TOOLTIP_DURATION, safe_destroy)
 
-        # 点击外部区域（失去焦点）时关闭（延迟检查，避免误关）
-        def on_focus_out(event):
-            root.after(100, lambda: safe_destroy() if not root.focus_get() else None)
+        # 失去焦点关闭
+        root.bind("<FocusOut>", safe_destroy)
+        root.bind("<Escape>", lambda _e: safe_destroy())
 
-        # 失去焦点时关闭
-        root.bind("<FocusOut>", on_focus_out)
-        # 按下 ESC 键时关闭
-        root.bind("<Escape>", lambda e: safe_destroy())
-
-        root.focus_force()  # 让窗口获得焦点
+        root.focus_force()
         root.mainloop()
-    # daemon=False 表示主线程结束后等待子线程结束
-    thread = threading.Thread(target=run, daemon=False)
+
+    # 使用线程避免阻塞
+    thread = threading.Thread(target=update_or_create, daemon=True)
     thread.start()
 
 def main():
