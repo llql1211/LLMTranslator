@@ -293,7 +293,57 @@ def main():
     # # 此处输出提示信息会覆盖翻译结果
     # show_tooltip("等待快捷键...", 15, 1, "timed")
 
+def show_startup_hint():
+    """
+    显示程序运行提示框（灰底半透明，常驻屏幕右上角，可拖动）
+
+    通过 Tkinter 窗口实现，无边框置顶显示
+    """
+    root = tkinter.Tk()
+    root.overrideredirect(True)
+    root.attributes('-topmost', True)
+    root.attributes('-alpha', 0.80)  # 透明度 80%
+    root.configure(bg='#303030')
+
+    # 获取屏幕尺寸
+    root.update_idletasks()
+    screen_width = root.winfo_screenwidth()
+
+    label = tkinter.Label(
+        root,
+        text="LLMTranslater is running...",
+        font=("Microsoft YaHei", 10, "bold"),
+        bg='#303030',
+        fg='white',
+        padx=14,
+        pady=8
+    )
+    label.pack()
+    root.update_idletasks()
+    win_w = label.winfo_reqwidth() + 4
+
+    # 拖动功能
+    drag_data = {"x": 0, "y": 0}
+
+    def on_mouse_down(event):
+        drag_data["x"] = event.x_root - root.winfo_x()
+        drag_data["y"] = event.y_root - root.winfo_y()
+
+    def on_mouse_move(event):
+        root.geometry(f"+{event.x_root - drag_data['x']}+{event.y_root - drag_data['y']}")
+
+    label.bind("<Button-1>", on_mouse_down)
+    label.bind("<B1-Motion>", on_mouse_move)
+
+    # 放在屏幕右上角
+    root.geometry(f"+{screen_width - win_w - 250}+{30}")
+    root.mainloop()
+
+
 if __name__ == "__main__":
+    # 启动提示框（守护线程，程序退出时自动销毁）
+    threading.Thread(target=show_startup_hint, daemon=True).start()
+
     with keyboard.GlobalHotKeys(hotkeys) as h:
         # 仅一次，输出提示信息
         print("========\n等待快捷键... ", end="")
