@@ -127,7 +127,7 @@ def translate_with_llm(text):
     - api_key 非空 → OpenAI 兼容格式（/v1/chat/completions）
     报错返回空串
     """
-    prompt = PROMPT_TEMPLATE.format(input_text=text)
+    prompt = PROMPT_TEMPLATE.format(target_lang=TARGET_LANG, input_text=text)
 
     if API_KEY:
         # OpenAI 兼容格式
