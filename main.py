@@ -2,7 +2,6 @@ import json
 import os
 import re
 import signal
-import sys
 import threading
 import time
 import tkinter
@@ -39,6 +38,7 @@ KB_CONTR = keyboard.Controller()
 def handler(signum, frame):
     '''将 handler 函数设置为空，忽略 Ctrl+C 中断信号'''
     ...
+
 signal.signal(signal.SIGINT, handler)
 
 def on_activate():
@@ -49,13 +49,85 @@ def on_quit():
     '''退出热键触发时的回调函数'''
     print("\n退出程序")
     show_tooltip("程序已退出", 15, 1, "timed")
-    sys.exit(0)
+    # 不能只用 sys.exit()（守护线程中只退出线程），用 os._exit 强制结束整个进程
+    threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start()
 
-# 绑定热键与响应函数
-hotkeys = {
-    HOTKEY_TRANSLATE: on_activate,
-    HOTKEY_QUIT: on_quit
-}
+def parse_hotkey(spec):
+    """解析 '<ctrl>+<shift>+e' 格式的热键，返回 (修饰键集合, 主键)"""
+    parts = spec.lower().split("+")
+    mods = set()
+    key_char = ""
+    for p in parts:
+        p = p.strip("<>")
+        if p in ("ctrl", "shift", "alt", "cmd"):
+            mods.add(p)
+        else:
+            key_char = p
+    return mods, key_char
+
+HOTKEY_TRANSLATE_MODS, HOTKEY_TRANSLATE_KEY = parse_hotkey(HOTKEY_TRANSLATE)
+HOTKEY_QUIT_MODS, HOTKEY_QUIT_KEY = parse_hotkey(HOTKEY_QUIT)
+
+# 当前修饰键按下状态
+_pressed_mods = set()
+
+def _matches_key(key, expected_char):
+    """
+    判断按键是否匹配期望字符（通过 VK 精确匹配，不受 Ctrl/Shift 修饰键影响）
+    Windows 下字母 VK 等于其大写 ASCII 码：E=69, Q=81
+    """
+    vk = getattr(key, 'vk', None)
+    if vk is None:
+        return False
+    expected_vk = ord(expected_char.upper())
+    return vk == expected_vk
+
+def on_press(key):
+    """键盘按下监听"""
+    global _pressed_mods
+
+    try:
+        # 记录修饰键
+        if key in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+            _pressed_mods.add("ctrl")
+            return
+        if key in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r):
+            _pressed_mods.add("shift")
+            return
+        if key in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r):
+            _pressed_mods.add("alt")
+            return
+        if key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+            _pressed_mods.add("cmd")
+            return
+
+        # 检查翻译热键
+        if _matches_key(key, HOTKEY_TRANSLATE_KEY) and _pressed_mods == HOTKEY_TRANSLATE_MODS:
+            threading.Thread(target=on_activate, daemon=True).start()
+            return
+
+        # 检查退出热键
+        if _matches_key(key, HOTKEY_QUIT_KEY) and _pressed_mods == HOTKEY_QUIT_MODS:
+            threading.Thread(target=on_quit, daemon=True).start()
+            return
+
+    except Exception:
+        pass
+
+def on_release(key):
+    """键盘释放监听"""
+    global _pressed_mods
+    try:
+        if key in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r):
+            _pressed_mods.discard("ctrl")
+        elif key in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r):
+            _pressed_mods.discard("shift")
+        elif key in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r):
+            _pressed_mods.discard("alt")
+        elif key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+            _pressed_mods.discard("cmd")
+    except Exception:
+        pass
 
 def clean_english_text(text):
     """
@@ -344,8 +416,10 @@ if __name__ == "__main__":
     # 启动提示框（守护线程，程序退出时自动销毁）
     threading.Thread(target=show_startup_hint, daemon=True).start()
 
-    with keyboard.GlobalHotKeys(hotkeys) as h:
-        # 仅一次，输出提示信息
-        print("========\n等待快捷键... ", end="")
-        show_tooltip("等待快捷键...", 15, 1, "timed")
-        h.join()
+    # 仅一次，输出提示信息
+    print("========\n等待快捷键... ", end="")
+    show_tooltip("等待快捷键...", 15, 1, "timed")
+
+    # 使用自定义 Listener 替代 GlobalHotKeys，避免单独按 e/q 误触发热键
+    with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+        listener.join()
