@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -5,6 +7,7 @@ import signal
 import threading
 import time
 import tkinter
+from typing import Literal
 
 import pyautogui
 from pynput import keyboard
@@ -19,43 +22,52 @@ with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
 API_BASE_URL = config["api"]["base_url"]
 MODEL_NAME = config["api"]["model_name"]
 API_KEY = config["api"]["api_key"]
+
 TARGET_LANG = config["translation"]["target_lang"]
 PROMPT_TEMPLATE = config["translation"]["prompt_template"]
+
 HOTKEY_TRANSLATE = config["hotkeys"]["translate"]
 HOTKEY_QUIT = config["hotkeys"]["quit"]
+
 TOOLTIP_DURATION = config["tooltip"]["duration_ms"]
 BACKGROUND_COLOR = config["tooltip"]["background_color"]
 TOOLTIP_OFFSET_X = config["tooltip"]["offset_x"]
 TOOLTIP_OFFSET_Y = config["tooltip"]["offset_y"]
 RESULT_MAX_WIDTH = config["tooltip"]["result_max_width"]
 RESULT_MAX_HEIGHT = config["tooltip"]["result_max_height"]
+
 RESTORE_CLIPBOARD = config["restore_clipboard"]
 
 
 # 从 keyboard 创建 Controller 实例，用于模拟按键操作
 KB_CONTR = keyboard.Controller()
 
-def handler(signum, frame):
-    '''将 handler 函数设置为空，忽略 Ctrl+C 中断信号'''
-    ...
+
+def handler(signum: int, _: object) -> None:
+    """将 handler 函数设置为空，忽略 Ctrl+C 中断信号"""
+    pass
+
 
 signal.signal(signal.SIGINT, handler)
 
-def on_activate():
-    '''翻译热键触发时的回调函数'''
+
+def on_activate() -> None:
+    """翻译热键触发时的回调函数"""
     main()
 
-def on_quit():
-    '''退出热键触发时的回调函数'''
-    print("\n退出程序")
+
+def on_quit() -> None:
+    """退出热键触发时的回调函数"""
+    print("\n退出程序\n")
     show_tooltip("程序已退出", 15, 1, "timed")
     # 不能只用 sys.exit()（守护线程中只退出线程），用 os._exit 强制结束整个进程
     threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start()
 
-def parse_hotkey(spec):
+
+def parse_hotkey(spec: str) -> tuple[set[str], str]:
     """解析 '<ctrl>+<shift>+e' 格式的热键，返回 (修饰键集合, 主键)"""
     parts = spec.lower().split("+")
-    mods = set()
+    mods: set[str] = set()
     key_char = ""
     for p in parts:
         p = p.strip("<>")
@@ -65,16 +77,19 @@ def parse_hotkey(spec):
             key_char = p
     return mods, key_char
 
+
 HOTKEY_TRANSLATE_MODS, HOTKEY_TRANSLATE_KEY = parse_hotkey(HOTKEY_TRANSLATE)
 HOTKEY_QUIT_MODS, HOTKEY_QUIT_KEY = parse_hotkey(HOTKEY_QUIT)
 
 # 当前修饰键按下状态
 _pressed_mods = set()
 
-def _matches_key(key, expected_char):
+
+def _matches_key(key: object, expected_char: str) -> bool:
     """
     判断按键是否匹配期望字符（通过 VK 精确匹配，不受 Ctrl/Shift 修饰键影响）
-    Windows 下字母 VK 等于其大写 ASCII 码：E=69, Q=81
+
+    Windows 下字母 VK 等于其大写 ASCII 码
     """
     vk = getattr(key, 'vk', None)
     if vk is None:
@@ -82,7 +97,8 @@ def _matches_key(key, expected_char):
     expected_vk = ord(expected_char.upper())
     return vk == expected_vk
 
-def on_press(key):
+
+def on_press(key: keyboard.Key | keyboard.KeyCode | None) -> None:
     """键盘按下监听"""
     global _pressed_mods
 
@@ -114,7 +130,8 @@ def on_press(key):
     except Exception:
         pass
 
-def on_release(key):
+
+def on_release(key: keyboard.Key | keyboard.KeyCode | None) -> None:
     """键盘释放监听"""
     global _pressed_mods
     try:
@@ -129,7 +146,8 @@ def on_release(key):
     except Exception:
         pass
 
-def clean_english_text(text):
+
+def clean_english_text(text: str) -> str:
     """
     清洗 ASCII 文本
 
@@ -139,16 +157,16 @@ def clean_english_text(text):
     punctuation = {'.', '?', '!'}
     cleaned = ""
 
-    # 若当前行以小写字母开头，且上一行不以标点结尾，则直接合并
-    # 若当前行以大写字母开头，且上一行末尾无标点，默认添加句号
     for i in range(len(lines)):
         current = lines[i]
         if not cleaned:
             cleaned = current
         elif not current:
             cleaned += '\n'
+        # 若当前行以小写字母开头，且上一行不以标点结尾，则直接合并
         elif current[0].islower() and (cleaned[-1] not in punctuation):
             cleaned = cleaned + ' ' + current
+        # 若当前行以大写字母开头，且上一行末尾无标点，默认添加句号
         elif current[0].isupper() and (cleaned[-1] not in punctuation):
             cleaned += '.\n' + current
         else:
@@ -158,10 +176,11 @@ def clean_english_text(text):
     cleaned = re.sub(r'[ \t]+', ' ', cleaned)
     return cleaned.strip()
 
-def get_selected_text():
+
+def get_selected_text() -> str:
     """
     模拟 Ctrl+C 获取当前选中文本
-    
+
     报错返回空串
     """
     old_clipboard = pyperclip.paste()
@@ -196,11 +215,14 @@ def get_selected_text():
         if RESTORE_CLIPBOARD:
             pyperclip.copy(old_clipboard)
 
-def translate_with_llm(text):
+
+def translate_with_llm(text: str) -> str:
     """
     调用 LLM API 翻译
+
     - api_key 为空 → Ollama 原生格式（/api/generate）
     - api_key 非空 → OpenAI 兼容格式（/v1/chat/completions）
+
     报错返回空串
     """
     prompt = PROMPT_TEMPLATE.format(target_lang=TARGET_LANG, input_text=text)
@@ -246,12 +268,14 @@ def translate_with_llm(text):
 
     return result_text
 
+
 # 全局 Tkinter 窗口，复用避免重复创建
 _TOOLTIP_ROOT = None
 _TOOLTIP_TEXT = None
 _TOOLTIP_TIMER_ID = None
 
-def show_tooltip(text, w, h, mode):
+
+def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]) -> None:
     """
     在鼠标右下角显示无边框矩形文本框（非阻塞）
 
@@ -341,7 +365,8 @@ def show_tooltip(text, w, h, mode):
     thread = threading.Thread(target=update_or_create, daemon=True)
     thread.start()
 
-def main():
+
+def main() -> None:
     print("-> 翻译热键触发 ", end="")
 
     selected = get_selected_text()
@@ -365,7 +390,8 @@ def main():
     # # 此处输出提示信息会覆盖翻译结果
     # show_tooltip("等待快捷键...", 15, 1, "timed")
 
-def show_startup_hint():
+
+def show_startup_hint() -> None:
     """
     显示程序运行提示框（灰底半透明，常驻屏幕右上角，可拖动）
 
@@ -420,6 +446,5 @@ if __name__ == "__main__":
     print("========\n等待快捷键... ", end="")
     show_tooltip("等待快捷键...", 15, 1, "timed")
 
-    # 使用自定义 Listener 替代 GlobalHotKeys，避免单独按 e/q 误触发热键
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
