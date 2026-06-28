@@ -58,8 +58,8 @@ def on_activate() -> None:
 
 def on_quit() -> None:
     """退出热键触发时的回调函数"""
-    print("\n退出程序\n")
-    show_tooltip("程序已退出", 15, 1, "timed")
+    print("\n正在退出...\n")
+    set_hint_message("正在退出...")
     # 不能只用 sys.exit()（守护线程中只退出线程），用 os._exit 强制结束整个进程
     threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start()
 
@@ -274,6 +274,17 @@ _TOOLTIP_ROOT = None
 _TOOLTIP_TEXT = None
 _TOOLTIP_TIMER_ID = None
 
+# 右上角常驻提示框
+_HINT_ROOT = None
+_HINT_LABEL = None
+
+
+def set_hint_message(msg: str) -> None:
+    """线程安全地更新右上角常驻提示框的文本"""
+    root = _HINT_ROOT
+    if root and root.winfo_exists():
+        root.after(0, lambda: _HINT_LABEL.config(text=msg) if _HINT_LABEL else None)
+
 
 def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]) -> None:
     """
@@ -366,37 +377,14 @@ def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]
     thread.start()
 
 
-def main() -> None:
-    print("-> 翻译热键触发 ", end="")
-
-    selected = get_selected_text()
-    if selected == "":
-        print("-> 未获取到选中文本，翻译取消")
-        show_tooltip("未获取选中文本", 15, 1, "timed")
-    else:
-        print("-> 已获取选中文本：\n" + selected)
-
-        show_tooltip("正在翻译...", 15, 1, "timed")
-        translation = translate_with_llm(selected)
-        if translation == "":
-            print("-> 翻译失败")
-            show_tooltip("翻译失败", 15, 1, "timed")
-        else:
-            print("-> 翻译成功：\n" + translation)
-            show_tooltip(translation, RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT, "persistent")
-            print(" -> 结果已显示")
-
-    print("========\n等待快捷键... ", end="")
-    # # 此处输出提示信息会覆盖翻译结果
-    # show_tooltip("等待快捷键...", 15, 1, "timed")
-
-
 def show_startup_hint() -> None:
     """
-    显示程序运行提示框（灰底半透明，常驻屏幕右上角，可拖动）
+    显示/更新程序运行提示框（灰底半透明，常驻屏幕右上角，可拖动）
 
     通过 Tkinter 窗口实现，无边框置顶显示
     """
+    global _HINT_ROOT, _HINT_LABEL
+
     root = tkinter.Tk()
     root.overrideredirect(True)
     root.attributes('-topmost', True)
@@ -409,16 +397,24 @@ def show_startup_hint() -> None:
 
     label = tkinter.Label(
         root,
-        text="LLMTranslater is running...",
+        text="等待快捷键...",
         font=("Microsoft YaHei", 10, "bold"),
         bg='#303030',
         fg='white',
-        padx=14,
+        width=16,
+        anchor="center",
+        padx=6,
         pady=8
     )
     label.pack()
     root.update_idletasks()
-    win_w = label.winfo_reqwidth() + 4
+
+    # 固定窗口宽度，不让文本变化导致窗口伸缩
+    win_w = label.winfo_reqwidth()
+
+    # 赋值到全局，供 set_hint_message() 使用
+    _HINT_ROOT = root
+    _HINT_LABEL = label
 
     # 拖动功能
     drag_data = {"x": 0, "y": 0}
@@ -436,6 +432,29 @@ def show_startup_hint() -> None:
     # 放在屏幕右上角
     root.geometry(f"+{screen_width - win_w - 250}+{30}")
     root.mainloop()
+    
+
+def main() -> None:
+    print("-> 翻译热键触发 ", end="")
+    set_hint_message("翻译中...")
+
+    selected = get_selected_text()
+    if selected == "":
+        print("-> 未获取到选中文本，翻译取消")
+        set_hint_message("未获取到文本")
+    else:
+        print("-> 已获取选中文本：\n" + selected)
+        translation = translate_with_llm(selected)
+        if translation == "":
+            print("-> 翻译失败")
+            show_tooltip("翻译失败", 15, 1, "timed")
+        else:
+            print("-> 翻译成功：\n" + translation)
+            show_tooltip(translation, RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT, "persistent")
+            print(" -> 结果已显示")
+
+    print("========\n\n等待快捷键... ", end="")
+    set_hint_message("等待快捷键...")
 
 
 if __name__ == "__main__":
@@ -444,7 +463,6 @@ if __name__ == "__main__":
 
     # 仅一次，输出提示信息
     print("========\n等待快捷键... ", end="")
-    show_tooltip("等待快捷键...", 15, 1, "timed")
 
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()
