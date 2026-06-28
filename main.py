@@ -10,7 +10,7 @@ import tkinter
 from typing import Literal
 
 import pyautogui
-from pynput import keyboard
+from pynput import keyboard, mouse
 import pyperclip
 import requests
 
@@ -288,14 +288,48 @@ def set_hint_message(msg: str) -> None:
 
 def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]) -> None:
     """
-    在鼠标右下角显示无边框矩形文本框（非阻塞）
+    在鼠标右下角显示无边框矩形文本框
 
-    w：字符，h：行，
-
-    mode: "timed" 5秒后自动关闭，"persistent" 长期显示
-
-    点击外部或按下 ESC 关闭
+    - w: 字符, h: 行
+    - mode: "timed" 5秒自动关闭，"persistent" 点击外部或按 Esc 关闭
+    - 不抢焦点，点击弹窗内部可选中文本，鼠标悬停可滚动
     """
+
+    _mouse_listener = None
+
+    def stop_mouse_listener():
+        """停止全局鼠标监听"""
+        nonlocal _mouse_listener
+        if _mouse_listener and _mouse_listener.running:
+            _mouse_listener.stop()
+        _mouse_listener = None
+
+    def on_click(x, y, _, pressed):
+        """全局鼠标点击回调——点击外部关闭弹窗"""
+        if not pressed:
+            return
+        nonlocal _mouse_listener
+        root = _TOOLTIP_ROOT
+        if root and root.winfo_exists():
+            try:
+                x1 = root.winfo_rootx()
+                y1 = root.winfo_rooty()
+                x2 = x1 + root.winfo_width()
+                y2 = y1 + root.winfo_height()
+                if not (x1 <= x <= x2 and y1 <= y <= y2):
+                    root.after(0, safe_destroy)
+            except tkinter.TclError:
+                pass
+
+    def start_mouse_listener():
+        """启动全局鼠标监听（仅 persistent 模式）"""
+        nonlocal _mouse_listener
+        stop_mouse_listener()
+        listener = mouse.Listener(on_click=on_click)
+        listener.daemon = True
+        listener.start()
+        _mouse_listener = listener
+
     def safe_destroy(_event=None):
         """安全销毁窗口（接受可选 event 参数用于 bind 回调）"""
         global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_TIMER_ID
@@ -308,6 +342,7 @@ def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]
         except tkinter.TclError:
             pass
         finally:
+            stop_mouse_listener()
             _TOOLTIP_ROOT = None
             _TOOLTIP_TEXT = None
 
@@ -328,9 +363,10 @@ def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]
                 _TOOLTIP_TIMER_ID = None
             if mode == "timed":
                 _TOOLTIP_TIMER_ID = _TOOLTIP_ROOT.after(TOOLTIP_DURATION, safe_destroy)
+            else:
+                start_mouse_listener()
 
             _TOOLTIP_ROOT.lift()
-            _TOOLTIP_ROOT.focus_force()
             return
 
         # 首次创建窗口
@@ -364,12 +400,11 @@ def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]
         # 定时关闭
         if mode == "timed":
             _TOOLTIP_TIMER_ID = root.after(TOOLTIP_DURATION, safe_destroy)
+        else:
+            start_mouse_listener()
 
-        # 失去焦点关闭
-        root.bind("<FocusOut>", safe_destroy)
         root.bind("<Escape>", lambda _e: safe_destroy())
 
-        root.focus_force()
         root.mainloop()
 
     # 使用线程避免阻塞
