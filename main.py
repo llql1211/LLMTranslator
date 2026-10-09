@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import signal
@@ -8,6 +9,7 @@ import threading
 import time
 import tkinter
 import tomllib
+from collections.abc import Iterator
 from typing import Literal
 
 import pyautogui
@@ -316,24 +318,22 @@ def get_selected_text() -> str:
             pyperclip.copy(old_clipboard)
 
 
-def translate_with_llm(text: str) -> str:
+def build_request(text: str, stream: bool) -> tuple[str, dict, dict]:
     """
-    调用 LLM API 翻译
+    构造翻译请求，返回 (url, payload, headers)
 
     - api_key 为空 → Ollama 原生格式（/api/generate）
     - api_key 非空 → OpenAI 兼容格式（/v1/chat/completions）
 
-    生成参数（GENERATION_PARAMS）按格式转换后一并发送
-
-    报错返回空串
+    生成参数（GENERATION_PARAMS）按格式转换后一并写入 payload
     """
     prompt = PROMPT_TEMPLATE.format(target_lang=TARGET_LANG, input_text=text)
 
     if API_KEY:
         # OpenAI 兼容格式
-        chat_url = API_BASE_URL.rstrip("/")
-        if not chat_url.endswith("/chat/completions"):
-            chat_url = chat_url.rstrip("/v1") + "/v1/chat/completions"
+        url = API_BASE_URL.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url = url.rstrip("/v1") + "/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {API_KEY}",
             "Content-Type": "application/json"
@@ -341,29 +341,93 @@ def translate_with_llm(text: str) -> str:
         payload = {
             "model": MODEL_NAME,
             "messages": [{"role": "user", "content": prompt}],
-            "stream": False,
+            "stream": stream,
             # OpenAI 兼容格式的生成参数平铺在顶层，字段名与配置项一致
             **GENERATION_PARAMS,
         }
-        do_request = lambda: requests.post(chat_url, json=payload, headers=headers, timeout=30)
     else:
         # Ollama 原生格式
+        url = API_BASE_URL
+        headers = {}
         payload = {
             "model": MODEL_NAME,
             "prompt": prompt,
-            "stream": False
+            "stream": stream
         }
         if GENERATION_PARAMS:
             # Ollama 原生格式的生成参数统一放在 options 中，且部分字段名与 OpenAI 不同
             payload["options"] = {
                 GEN_PARAM_MAP[k]: v for k, v in GENERATION_PARAMS.items()
             }
-        do_request = lambda: requests.post(API_BASE_URL, json=payload, timeout=30)
+
+    return url, payload, headers
+
+
+def parse_ollama_stream_line(line: str) -> str | None:
+    """
+    解析 Ollama 流式响应的一行（NDJSON），返回增量文本
+
+    空行、坏 JSON、无内容的分块一律返回 None，不让单行异常打断整段翻译
+    """
+    line = line.strip()
+    if not line:
+        return None
+
+    try:
+        chunk = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(chunk, dict):
+        return None
+
+    text = chunk.get("response")
+    return text if isinstance(text, str) and text else None
+
+
+def parse_openai_stream_line(line: str) -> str | None:
+    """
+    解析 OpenAI 流式响应的一行（SSE），返回增量文本
+
+    非 data: 开头的行、结束标记 [DONE]、坏 JSON、无内容的分块一律返回 None
+    """
+    line = line.strip()
+    if not line.startswith("data:"):
+        return None
+
+    data = line[len("data:"):].strip()
+    if not data or data == "[DONE]":
+        return None
+
+    try:
+        chunk = json.loads(data)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(chunk, dict):
+        return None
+
+    choices = chunk.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return None
+
+    delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
+    text = delta.get("content") if isinstance(delta, dict) else None
+    return text if isinstance(text, str) and text else None
+
+
+def translate_with_llm(text: str) -> str:
+    """
+    调用 LLM API 翻译，等全部生成完再返回
+
+    报错返回空串
+    """
+    url, payload, headers = build_request(text, stream=False)
 
     result_text = ""
     try:
         print("-> 翻译中... ", end="")
-        response = do_request()
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         result = response.json()
         if API_KEY:
@@ -376,6 +440,34 @@ def translate_with_llm(text: str) -> str:
         print(f"-> 翻译失败：{e} ")
 
     return result_text
+
+
+def translate_stream(text: str) -> Iterator[str]:
+    """
+    流式调用 LLM API 翻译，逐块产出增量文本
+
+    网络或服务端出错时抛异常，调用方已收到的部分由调用方自己保留
+
+    调用方提前结束迭代（如 break）时，生成器被关闭并断开连接
+    """
+    url, payload, headers = build_request(text, stream=True)
+    parse_line = parse_openai_stream_line if API_KEY else parse_ollama_stream_line
+
+    response = requests.post(
+        url, json=payload, headers=headers, timeout=30, stream=True
+    )
+    try:
+        response.raise_for_status()
+        for raw_line in response.iter_lines():
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if line.removeprefix("data:").strip() == "[DONE]":
+                # OpenAI 兼容格式的结束标记，收到即停止
+                break
+            chunk = parse_line(line)
+            if chunk:
+                yield chunk
+    finally:
+        response.close()
 
 
 # 全局 Tkinter 窗口，复用避免重复创建
