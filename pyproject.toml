@@ -1,0 +1,30 @@
+[project]
+name = "LLMTranslator"
+version = "0.1.0"
+description = "利用 LLM 翻译选中文本，并在鼠标光标处弹窗显示结果"
+readme = "README.md"
+requires-python = ">=3.14.6,<3.15"
+authors = [{ name = "llql1211", email = "1390116067@qq.com" }]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[tool.pixi.dependencies]
+pyautogui = ">=0.9.54,<0.10"
+pynput = ">=1.8.2,<2"
+pyperclip = ">=1.9.0,<2"
+requests = ">=2.34.2,<3"
+
+[tool.pixi.feature.dev.dependencies]
+pytest = ">=8.0"
+
+[tool.pixi.environments]
+default = { features = ["dev"] }
+
+[tool.pixi.tasks]
+run = "python main.py"
+test = "python -m pytest"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
