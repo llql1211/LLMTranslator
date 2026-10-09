@@ -44,24 +44,49 @@ LLMTranslator 利用模型（本地 Ollama 或云端 API），将选中的文本
 
 ## 配置参数
 
-所有配置集中在项目根目录的 `config.json` 中：
+所有配置集中在 `data/config.toml` 中。
 
-| 配置路径 | 字段 | 说明 | 默认值 |
-| :---: | :--- | :--- | :--- |
-| `api` | `base_url` | 翻译模型 API 地址 | `http://localhost:11434/api/generate` （Ollama） |
-| | `api_key` | API 密钥（留空用 Ollama 原生格式，非空切换 OpenAI 兼容格式） | `""` |
-| | `model_name` | 模型名称 | `HY-MT1.5-1.8B-Q8_0:latest` |
-| `translation` | `target_lang` | 目标语言 | `Chinese` |
-| | `prompt_template` | 发送给模型的 prompt 模板，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
-| `hotkeys` | `translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
-| | `quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
-| `tooltip` | `background_color` | 弹窗背景色 | `#FFFFE0` |
-| | `offset_x` | 弹窗相对于鼠标光标的 X 偏移 | `20` |
-| | `offset_y` | 弹窗相对于鼠标光标的 Y 偏移 | `20` |
-| | `result_max_width` | 弹窗最大宽度（字符数） | `30` |
-| | `result_max_height` | 弹窗最大行数 | `8` |
-| | `duration_ms` | 错误提示弹窗的持续时间（毫秒） | `1500` |
-| `restore_clipboard` | — | 是否在获取文本后恢复原始剪贴板内容 | `false` |
+该文件**不纳入版本管理**（可能包含 `api_key`），首次使用请从模板复制：
+
+```bash
+copy data\config.example.toml data\config.toml   # Windows
+cp data/config.example.toml data/config.toml     # Linux/macOS
+```
+
+模板 `data/config.example.toml` 中每一项都带有注释说明。其中 `base_url` 与 `model_name` 为**必填项**，模板中留空，需自行填写；其余各项均有可用默认值。各字段含义如下：
+
+| 字段 | 说明 | 模板默认值 |
+| :--- | :--- | :--- |
+| `base_url` | **必填**。翻译模型 API 地址。`api_key` 留空时填 Ollama 的 `/api/generate` 地址（如 `http://localhost:11434/api/generate`）；`api_key` 非空时填服务根地址即可（自动补全为 `/v1/chat/completions`） | `""` |
+| `api_key` | API 密钥（留空用 Ollama 原生格式，非空切换 OpenAI 兼容格式） | `""` |
+| `model_name` | **必填**。模型名称，如在 Ollama 中创建的模型名 | `""` |
+| `target_lang` | 目标语言 | `Chinese` |
+| `prompt_template` | 发送给模型的 prompt 模板，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
+| `hotkey_translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
+| `hotkey_quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
+| `tooltip_background_color` | 弹窗背景色 | `#FFFFE0` |
+| `tooltip_offset_x` | 弹窗相对于鼠标光标的 X 偏移（像素） | `20` |
+| `tooltip_offset_y` | 弹窗相对于鼠标光标的 Y 偏移（像素） | `20` |
+| `tooltip_result_max_width` | 翻译结果弹窗宽度（字符数） | `30` |
+| `tooltip_result_max_height` | 翻译结果弹窗高度（行数） | `8` |
+| `tooltip_duration_ms` | 错误提示弹窗的自动关闭时间（毫秒） | `1500` |
+| `restore_clipboard` | 是否在获取文本后恢复原始剪贴板内容 | `false` |
+
+### 生成参数
+
+| 字段 | 说明 | 默认值 |
+| :--- | :--- | :--- |
+| `temperature` | 采样温度，越高越随机 | `0.7` |
+| `top_p` | 核采样阈值 | `0.6` |
+| `top_k` | 采样时仅保留概率最高的 K 个词 | `20` |
+| `repetition_penalty` | 重复惩罚系数，大于 1 可抑制重复 | `1.05` |
+| `max_tokens` | 单次生成的最大 token 数 | `4096` |
+
+这组参数采用**「写了才发送」**的策略：注释掉某一行，该参数就不会出现在请求中。
+
+- 全部注释掉即完全使用服务端默认值。
+- `top_k`、`repetition_penalty` 属于 Ollama 扩展参数，改用校验严格的云端 API 时建议注释掉，以免返回 400。
+- 两种请求格式的字段名由程序自动转换：Ollama 原生格式下 `max_tokens` → `num_predict`、`repetition_penalty` → `repeat_penalty`，且统一放入 `options` 字段；OpenAI 兼容格式下则平铺在请求体顶层。
 
 **注意**：
 
@@ -73,13 +98,21 @@ LLMTranslator 利用模型（本地 Ollama 或云端 API），将选中的文本
 
 - 若 `api_key` 非空，程序会自动将请求地址切换为 OpenAI 兼容格式。
 
-### 默认 prompt_template
+### prompt_template
+
+模板中的 `{target_lang}` 和 `{input_text}` 会分别替换为目标语言与选中文本。示例文件给出的是通用模板，适用于大多数指令模型：
 
 ```text
-你是一个翻译助手，专门将输入的文本翻译成{target_lang}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{input_text}<｜hy_Assistant｜>
+将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}
 ```
 
-若使用的模型与默认模型 `HY-MT1.5-1.8B-Q8_0:latest` 不同，需要修改 `prompt_template`。
+若使用下方推荐的 `Hy-MT2-1.8B-Q8_0:latest` 模型，则需改用与之配套的专用模板：
+
+```text
+<｜hy_begin▁of▁sentence｜>你是一个翻译助手，专门将输入的文本翻译成{target_lang}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{input_text}<｜hy_Assistant｜>
+```
+
+**注意**：`prompt_template` 需与所用模型匹配，模板不匹配会明显影响翻译质量。
 
 ## 部署模型与配置 Ollama
 
@@ -91,7 +124,7 @@ LLMTranslator 利用模型（本地 Ollama 或云端 API），将选中的文本
 
     从模型仓库（如 [Hugging Face](https://huggingface.co/models) 或 [镜像站](https://hf-mirror.com/models)）下载翻译模型，推荐使用 **GGUF** 格式（轻量、适合个人电脑）或 **Safetensors** 格式。  
 
-    **说明**：本代码使用模型 `HY-MT1.5-1.8B-Q8_0:latest`，并内置了**与之相配套的 prompt**，因此推荐下载该模型。
+    **说明**：本代码推荐使用模型 `Hy-MT2-1.8B-Q8_0:latest`，[配置参数](#配置参数) 一节给出了**与之相配套的 prompt**，使用时请一并替换 `prompt_template`。
 
 3. **创建 Modelfile**  
 
@@ -121,7 +154,7 @@ LLMTranslator 利用模型（本地 Ollama 或云端 API），将选中的文本
 
 1. 确保 Ollama 服务已运行（可通过 `ollama serve` 启动）。
 
-2. 如有需要，修改 `config.json` 中的配置项。
+2. 首次使用需将 `data/config.example.toml` 复制为 `data/config.toml`，随后按需修改配置项（详见[配置参数](#配置参数)）。
 
 3. 运行 `python main.py`。
 
