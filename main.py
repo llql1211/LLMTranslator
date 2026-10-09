@@ -161,12 +161,16 @@ def on_quit() -> None:
 
 
 def parse_hotkey(spec: str) -> tuple[set[str], str]:
-    """解析 '<ctrl>+<shift>+e' 格式的热键，返回 (修饰键集合, 主键)"""
+    """
+    解析 '<ctrl>+<shift>+e' 格式的热键，返回 (修饰键集合, 主键)
+
+    容忍配置中书写时多余的空白，如 '<ctrl> + <shift> + e'
+    """
     parts = spec.lower().split("+")
     mods: set[str] = set()
     key_char = ""
     for p in parts:
-        p = p.strip("<>")
+        p = p.strip().strip("<>")
         if p in ("ctrl", "shift", "alt", "cmd"):
             mods.add(p)
         else:
