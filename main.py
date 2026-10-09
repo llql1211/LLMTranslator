@@ -36,6 +36,7 @@ REQUIRED_KEYS = (
     "hotkey_translate",
     "hotkey_quit",
     "tooltip_background_color",
+    "tooltip_text_color",
     "tooltip_offset_x",
     "tooltip_offset_y",
     "tooltip_result_max_width",
@@ -128,6 +129,7 @@ HOTKEY_QUIT = config["hotkey_quit"]
 
 TOOLTIP_DURATION = config["tooltip_duration_ms"]
 BACKGROUND_COLOR = config["tooltip_background_color"]
+TEXT_COLOR = config["tooltip_text_color"]
 TOOLTIP_OFFSET_X = config["tooltip_offset_x"]
 TOOLTIP_OFFSET_Y = config["tooltip_offset_y"]
 RESULT_MAX_WIDTH = config["tooltip_result_max_width"]
@@ -517,8 +519,9 @@ def _create_tooltip_window(x: int, y: int, w: int, h: int) -> tuple:
         height=h,
         relief=tkinter.FLAT,
         bg=BACKGROUND_COLOR,
-        fg='black',
-        insertbackground='black',
+        fg=TEXT_COLOR,
+        # 文本光标跟随文字颜色，深色背景下不会留下一道刺眼的黑竖线
+        insertbackground=TEXT_COLOR,
         bd=0,
         padx=5,
         pady=5

@@ -32,6 +32,7 @@ BASE_CONFIG_VALUES: dict[str, object] = {
     "hotkey_translate": "<ctrl>+<shift>+e",
     "hotkey_quit": "<ctrl>+<shift>+q",
     "tooltip_background_color": "#FFFFE0",
+    "tooltip_text_color": "#000000",
     "tooltip_offset_x": 20,
     "tooltip_offset_y": 20,
     "tooltip_result_max_width": 30,

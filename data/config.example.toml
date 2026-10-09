@@ -71,6 +71,9 @@ hotkey_quit = "<ctrl>+<shift>+q"
 # 弹窗背景色，十六进制颜色值
 tooltip_background_color = "#FFFFE0"
 
+# 弹窗文本颜色，十六进制颜色值
+tooltip_text_color = "#000000"
+
 # 弹窗相对于鼠标光标的 X 偏移（像素）
 tooltip_offset_x = 20
 
