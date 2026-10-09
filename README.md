@@ -62,6 +62,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | `model_name` | **必填**。模型名称，如在 Ollama 中创建的模型名 | `""` |
 | `target_lang` | 目标语言 | `Chinese` |
 | `prompt_template` | 发送给模型的 prompt 模板，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
+| `stream` | 流式输出。为 `true` 时边翻译边显示，弹窗随内容增长；为 `false` 时等整段翻完再一次性显示 | `true` |
 | `hotkey_translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
 | `hotkey_quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
 | `tooltip_background_color` | 弹窗背景色 | `#FFFFE0` |
@@ -97,6 +98,8 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 - 若 `restore_clipboard` 设为 `true`，翻译操作不会覆盖剪贴板原有内容。
 
 - 若 `api_key` 非空，程序会自动将请求地址切换为 OpenAI 兼容格式。
+
+- 结果弹窗点击外部或按 `Esc` 关闭。若翻译尚未结束就关闭，会同时中断正在进行的请求，已翻出的部分不再保留。
 
 ### prompt_template
 
