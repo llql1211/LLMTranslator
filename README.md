@@ -66,6 +66,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | `hotkey_translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
 | `hotkey_quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
 | `tooltip_background_color` | 弹窗背景色 | `#FFFFE0` |
+| `tooltip_text_color` | 弹窗文本颜色 | `#000000` |
 | `tooltip_offset_x` | 弹窗相对于鼠标光标的 X 偏移（像素） | `20` |
 | `tooltip_offset_y` | 弹窗相对于鼠标光标的 Y 偏移（像素） | `20` |
 | `tooltip_result_max_width` | 翻译结果弹窗宽度（字符数） | `30` |
