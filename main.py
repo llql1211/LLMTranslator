@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
 import signal
 import sys
@@ -9,7 +10,7 @@ import threading
 import time
 import tkinter
 import tomllib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Literal
 
 import pyautogui
@@ -41,6 +42,7 @@ REQUIRED_KEYS = (
     "tooltip_result_max_height",
     "tooltip_duration_ms",
     "restore_clipboard",
+    "stream",
 )
 
 # 必填且不能为空的配置项
@@ -132,6 +134,9 @@ RESULT_MAX_WIDTH = config["tooltip_result_max_width"]
 RESULT_MAX_HEIGHT = config["tooltip_result_max_height"]
 
 RESTORE_CLIPBOARD = config["restore_clipboard"]
+
+# 开：边翻译边显示；关：等整段翻完再一次性显示
+STREAM = config["stream"]
 
 # 只在配置文件中写出的生成参数才会被发送，注释掉即使用服务端默认值
 GENERATION_PARAMS = {k: config[k] for k in GEN_PARAM_MAP if k in config}
@@ -473,7 +478,12 @@ def translate_stream(text: str) -> Iterator[str]:
 # 全局 Tkinter 窗口，复用避免重复创建
 _TOOLTIP_ROOT = None
 _TOOLTIP_TEXT = None
-_TOOLTIP_TIMER_ID = None
+
+# 当前弹窗关闭方式的清理函数（停鼠标监听、取消定时器）
+_TOOLTIP_CLEANUP: Callable[[], None] | None = None
+
+# 流式显示的刷新间隔（毫秒）
+STREAM_POLL_MS = 50
 
 # 右上角常驻提示框
 _HINT_ROOT = None
@@ -487,6 +497,115 @@ def set_hint_message(msg: str) -> None:
         root.after(0, lambda: _HINT_LABEL.config(text=msg) if _HINT_LABEL else None)
 
 
+def _create_tooltip_window(x: int, y: int, w: int, h: int) -> tuple:
+    """
+    在鼠标位置创建无边框置顶弹窗
+
+    返回 (root, text_area)，须在随后运行该 root 的 mainloop 的线程中调用
+    """
+    root = tkinter.Tk()
+    root.overrideredirect(True)
+    root.attributes('-topmost', True)
+    root.configure(bg=BACKGROUND_COLOR)
+    root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
+
+    text_area = tkinter.Text(
+        root,
+        wrap=tkinter.WORD,
+        font=("Microsoft YaHei", 10),
+        width=w,
+        height=h,
+        relief=tkinter.FLAT,
+        bg=BACKGROUND_COLOR,
+        fg='black',
+        insertbackground='black',
+        bd=0,
+        padx=5,
+        pady=5
+    )
+    text_area.pack(fill=tkinter.BOTH, expand=True)
+
+    return root, text_area
+
+
+def _attach_close_handlers(root, on_close: Callable[[], None], mode: Literal["timed", "persistent"]) -> Callable[[], None]:
+    """
+    给弹窗绑定关闭方式，返回清理函数
+
+    - "timed"：TOOLTIP_DURATION 毫秒后自动关闭
+    - "persistent"：点击弹窗外部或按 Esc 关闭
+
+    清理函数用于取消定时器并停止鼠标监听，销毁窗口前必须先调用
+    """
+    holder = {"listener": None, "timer": None}
+
+    def stop_listener():
+        listener = holder["listener"]
+        if listener and listener.running:
+            listener.stop()
+        holder["listener"] = None
+
+    def on_click(x, y, _, pressed):
+        """全局鼠标点击回调——点击外部关闭弹窗"""
+        if not pressed:
+            return
+        try:
+            x1 = root.winfo_rootx()
+            y1 = root.winfo_rooty()
+            x2 = x1 + root.winfo_width()
+            y2 = y1 + root.winfo_height()
+            if not (x1 <= x <= x2 and y1 <= y <= y2):
+                root.after(0, on_close)
+        except tkinter.TclError:
+            pass
+
+    def start_listener():
+        stop_listener()
+        listener = mouse.Listener(on_click=on_click)
+        listener.daemon = True
+        listener.start()
+        holder["listener"] = listener
+
+    if mode == "timed":
+        holder["timer"] = root.after(TOOLTIP_DURATION, on_close)
+    else:
+        start_listener()
+
+    root.bind("<Escape>", lambda _e: on_close())
+
+    def cleanup():
+        stop_listener()
+        if holder["timer"]:
+            try:
+                root.after_cancel(holder["timer"])
+            except tkinter.TclError:
+                pass
+            holder["timer"] = None
+
+    return cleanup
+
+
+def estimate_display_lines(text: str, width: int) -> int:
+    """
+    估算文本在给定宽度下占用的显示行数
+
+    Text 的 width 以「平均字符宽度」为单位，中日韩字符约占两倍，其余按一倍计
+
+    以估算代替 Tk 的 displaylines：后者要求控件已完成布局，刷新过程中拿到的
+    数值并不可靠。此处宁可粗糙，只要随内容单调增长即可
+    """
+    total = 0
+    for line in text.split("\n"):
+        units = sum(2 if ord(ch) > 0x2E80 else 1 for ch in line)
+        total += max(1, -(-units // width))
+    return total
+
+
+def _fit_tooltip_height(text_area, text: str, w: int, max_height: int) -> None:
+    """按内容估算高度，到 max_height 行封顶，超出部分靠内部滚动查看"""
+    text_area.config(height=max(1, min(max_height, estimate_display_lines(text, w))))
+
+
 def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]) -> None:
     """
     在鼠标右下角显示无边框矩形文本框
@@ -496,121 +615,168 @@ def show_tooltip(text: str, w: int, h: int, mode: Literal["timed", "persistent"]
     - 不抢焦点，点击弹窗内部可选中文本，鼠标悬停可滚动
     """
 
-    _mouse_listener = None
-
-    def stop_mouse_listener():
-        """停止全局鼠标监听"""
-        nonlocal _mouse_listener
-        if _mouse_listener and _mouse_listener.running:
-            _mouse_listener.stop()
-        _mouse_listener = None
-
-    def on_click(x, y, _, pressed):
-        """全局鼠标点击回调——点击外部关闭弹窗"""
-        if not pressed:
-            return
-        nonlocal _mouse_listener
-        root = _TOOLTIP_ROOT
-        if root and root.winfo_exists():
-            try:
-                x1 = root.winfo_rootx()
-                y1 = root.winfo_rooty()
-                x2 = x1 + root.winfo_width()
-                y2 = y1 + root.winfo_height()
-                if not (x1 <= x <= x2 and y1 <= y <= y2):
-                    root.after(0, safe_destroy)
-            except tkinter.TclError:
-                pass
-
-    def start_mouse_listener():
-        """启动全局鼠标监听（仅 persistent 模式）"""
-        nonlocal _mouse_listener
-        stop_mouse_listener()
-        listener = mouse.Listener(on_click=on_click)
-        listener.daemon = True
-        listener.start()
-        _mouse_listener = listener
-
     def safe_destroy(_event=None):
         """安全销毁窗口（接受可选 event 参数用于 bind 回调）"""
-        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_TIMER_ID
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_CLEANUP
+        cleanup, _TOOLTIP_CLEANUP = _TOOLTIP_CLEANUP, None
+        if cleanup:
+            cleanup()
         try:
             if _TOOLTIP_ROOT and _TOOLTIP_ROOT.winfo_exists():
-                if _TOOLTIP_TIMER_ID:
-                    _TOOLTIP_ROOT.after_cancel(_TOOLTIP_TIMER_ID)
-                    _TOOLTIP_TIMER_ID = None
                 _TOOLTIP_ROOT.destroy()
         except tkinter.TclError:
             pass
-        finally:
-            stop_mouse_listener()
-            _TOOLTIP_ROOT = None
-            _TOOLTIP_TEXT = None
+        _TOOLTIP_ROOT = None
+        _TOOLTIP_TEXT = None
 
     def update_or_create():
-        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_TIMER_ID
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_CLEANUP
 
         x, y = pyautogui.position()
 
         if _TOOLTIP_TEXT and _TOOLTIP_ROOT and _TOOLTIP_ROOT.winfo_exists():
-            # 复用已有窗口：移动位置、更新文本
-            _TOOLTIP_ROOT.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
-            _TOOLTIP_TEXT.config(height=h, width=w)
-            _TOOLTIP_TEXT.delete(1.0, tkinter.END)
-            _TOOLTIP_TEXT.insert(tkinter.END, text)
-
-            if _TOOLTIP_TIMER_ID:
-                _TOOLTIP_ROOT.after_cancel(_TOOLTIP_TIMER_ID)
-                _TOOLTIP_TIMER_ID = None
-            if mode == "timed":
-                _TOOLTIP_TIMER_ID = _TOOLTIP_ROOT.after(TOOLTIP_DURATION, safe_destroy)
-            else:
-                start_mouse_listener()
-
-            _TOOLTIP_ROOT.lift()
+            # 复用已有窗口：移动位置、更新文本、重绑关闭方式
+            root, text_area = _TOOLTIP_ROOT, _TOOLTIP_TEXT
+            if _TOOLTIP_CLEANUP:
+                _TOOLTIP_CLEANUP()
+            root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
+            text_area.config(height=h, width=w)
+            text_area.delete(1.0, tkinter.END)
+            text_area.insert(tkinter.END, text)
+            _TOOLTIP_CLEANUP = _attach_close_handlers(root, safe_destroy, mode)
+            root.lift()
             return
 
         # 首次创建窗口
-        root = tkinter.Tk()
-        root.overrideredirect(True)
-        root.attributes('-topmost', True)
-        root.configure(bg=BACKGROUND_COLOR)
-        root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
-
-        text_area = tkinter.Text(
-            root,
-            wrap=tkinter.WORD,
-            font=("Microsoft YaHei", 10),
-            width=w,
-            height=h,
-            relief=tkinter.FLAT,
-            bg=BACKGROUND_COLOR,
-            fg='black',
-            insertbackground='black',
-            bd=0,
-            padx=5,
-            pady=5
-        )
-        text_area.pack(fill=tkinter.BOTH, expand=True)
+        root, text_area = _create_tooltip_window(x, y, w, h)
         text_area.insert(tkinter.END, text)
 
         _TOOLTIP_ROOT = root
         _TOOLTIP_TEXT = text_area
-        _TOOLTIP_TIMER_ID = None
-
-        # 定时关闭
-        if mode == "timed":
-            _TOOLTIP_TIMER_ID = root.after(TOOLTIP_DURATION, safe_destroy)
-        else:
-            start_mouse_listener()
-
-        root.bind("<Escape>", lambda _e: safe_destroy())
+        _TOOLTIP_CLEANUP = _attach_close_handlers(root, safe_destroy, mode)
 
         root.mainloop()
 
     # 使用线程避免阻塞
     thread = threading.Thread(target=update_or_create, daemon=True)
     thread.start()
+
+
+def show_streaming_tooltip(chunks: Iterator[str], w: int, h: int) -> str | None:
+    """
+    边接收边刷新弹窗，返回最终文本
+
+    用户在中途关闭弹窗时停止接收并返回 None
+
+    - 弹窗先于首个分块创建，用户立刻有反馈
+    - 高度随内容增长，到 h 行封顶后靠内部滚动
+    - 全程 persistent 语义：点击外部或按 Esc 关闭，并中断请求
+    """
+    updates: queue.Queue[str] = queue.Queue()
+    window_ready = threading.Event()
+    finished = threading.Event()
+    cancelled = threading.Event()
+
+    def safe_destroy(_event=None):
+        """关闭弹窗，并通知接收循环停下来"""
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_CLEANUP
+        cancelled.set()
+        cleanup, _TOOLTIP_CLEANUP = _TOOLTIP_CLEANUP, None
+        if cleanup:
+            cleanup()
+        try:
+            if _TOOLTIP_ROOT and _TOOLTIP_ROOT.winfo_exists():
+                _TOOLTIP_ROOT.destroy()
+        except tkinter.TclError:
+            pass
+        _TOOLTIP_ROOT = None
+        _TOOLTIP_TEXT = None
+
+    def drain() -> str | None:
+        """取走队列中的全部文本，只留最后一条——中间的中间态没有显示价值"""
+        latest = None
+        while True:
+            try:
+                latest = updates.get_nowait()
+            except queue.Empty:
+                return latest
+
+    def poll():
+        """在 Tk 线程内刷新弹窗"""
+        root, text_area = _TOOLTIP_ROOT, _TOOLTIP_TEXT
+        if not root or not text_area or not root.winfo_exists():
+            return
+
+        latest = drain()
+        if latest is not None:
+            text_area.delete("1.0", tkinter.END)
+            text_area.insert(tkinter.END, latest)
+            _fit_tooltip_height(text_area, latest, w, h)
+            text_area.see(tkinter.END)
+
+        if not finished.is_set():
+            root.after(STREAM_POLL_MS, poll)
+
+    def create_and_run():
+        global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_CLEANUP
+
+        x, y = pyautogui.position()
+
+        if _TOOLTIP_ROOT and _TOOLTIP_TEXT and _TOOLTIP_ROOT.winfo_exists():
+            # 复用已有窗口：清空内容、重绑关闭方式
+            # 轮询回调交给该窗口自己的事件循环执行
+            root, text_area = _TOOLTIP_ROOT, _TOOLTIP_TEXT
+            if _TOOLTIP_CLEANUP:
+                _TOOLTIP_CLEANUP()
+            root.geometry(f"+{x+TOOLTIP_OFFSET_X}+{y+TOOLTIP_OFFSET_Y}")
+            text_area.config(width=w, height=1)
+            text_area.delete("1.0", tkinter.END)
+            _TOOLTIP_CLEANUP = _attach_close_handlers(root, safe_destroy, "persistent")
+            root.lift()
+            window_ready.set()
+            root.after(0, poll)
+            return
+
+        root, text_area = _create_tooltip_window(x, y, w, 1)
+        _TOOLTIP_ROOT = root
+        _TOOLTIP_TEXT = text_area
+        _TOOLTIP_CLEANUP = _attach_close_handlers(root, safe_destroy, "persistent")
+
+        window_ready.set()
+        poll()
+        root.mainloop()
+
+    threading.Thread(target=create_and_run, daemon=True).start()
+    # 等窗口就绪，避免失败时与随后的 show_tooltip 争夺全局窗口
+    window_ready.wait(timeout=5)
+
+    parts: list[str] = []
+    failure: Exception | None = None
+    try:
+        print("-> 翻译中（流式）... ")
+        for chunk in chunks:
+            if cancelled.is_set():
+                break
+            parts.append(chunk)
+            updates.put("".join(parts))
+    except Exception as e:
+        failure = e
+    finally:
+        finished.set()
+
+    if cancelled.is_set():
+        print("-> 翻译已中断")
+        return None
+
+    result_text = "".join(parts)
+    if failure is not None:
+        print(f"-> 翻译中断：{failure} ")
+    elif result_text == "":
+        print("-> 翻译失败")
+    else:
+        print("-> 翻译成功：\n" + result_text)
+
+    return result_text
 
 
 def show_startup_hint() -> None:
@@ -680,14 +846,22 @@ def main() -> None:
         set_hint_message("未获取到文本")
     else:
         print("-> 已获取选中文本：\n" + selected)
-        translation = translate_with_llm(selected)
-        if translation == "":
-            print("-> 翻译失败")
-            show_tooltip("翻译失败", 15, 1, "timed")
+        if STREAM:
+            # 流式：内容边到边显示；返回 None 表示用户中途关掉了弹窗
+            translation = show_streaming_tooltip(
+                translate_stream(selected), RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT
+            )
+            if translation == "":
+                show_tooltip("翻译失败", 15, 1, "timed")
         else:
-            print("-> 翻译成功：\n" + translation)
-            show_tooltip(translation, RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT, "persistent")
-            print(" -> 结果已显示")
+            translation = translate_with_llm(selected)
+            if translation == "":
+                print("-> 翻译失败")
+                show_tooltip("翻译失败", 15, 1, "timed")
+            else:
+                print("-> 翻译成功：\n" + translation)
+                show_tooltip(translation, RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT, "persistent")
+                print(" -> 结果已显示")
 
     print("========\n\n等待快捷键... ", end="")
     set_hint_message("等待快捷键...")

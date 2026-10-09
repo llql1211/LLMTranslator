@@ -38,6 +38,8 @@ BASE_CONFIG_VALUES: dict[str, object] = {
     "tooltip_result_max_height": 8,
     "tooltip_duration_ms": 1500,
     "restore_clipboard": False,
+    # 默认关，需要验证流式分支的用例自行打开
+    "stream": False,
 }
 
 # 生成参数不在此列：不写即不发送，需要时由用例通过 render_toml() 显式传入

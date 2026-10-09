@@ -30,6 +30,9 @@ target_lang = "Chinese"
 # prompt 模板，使用 {target_lang} 和 {input_text} 占位符
 prompt_template = "将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}"
 
+# 流式输出：true 边翻译边显示，false 等整段翻完再一次性显示
+stream = true
+
 
 # ===== 生成参数 =====
 #
