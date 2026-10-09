@@ -31,6 +31,29 @@ target_lang = "Chinese"
 prompt_template = "将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}"
 
 
+# ===== 生成参数 =====
+#
+# 以下参数采用「写了才发送」的策略：注释掉某一行，该参数就不会出现在请求中。
+#   - 全部注释掉则完全使用服务端默认值。
+#   - 改用校验严格的云端 API 时，建议注释掉 top_k 和 repetition_penalty，
+#     这两个是 Ollama 扩展参数，部分服务商会返回 400。
+
+# 采样温度，越高越随机（0 ~ 2）
+temperature = 0.7
+
+# 核采样阈值（0 ~ 1）
+top_p = 0.6
+
+# 采样时仅保留概率最高的 K 个词（Ollama 扩展参数）
+top_k = 20
+
+# 重复惩罚系数，大于 1 可抑制重复（Ollama 扩展参数）
+repetition_penalty = 1.05
+
+# 单次生成的最大 token 数
+max_tokens = 4096
+
+
 # ===== 热键 =====
 
 # 翻译热键

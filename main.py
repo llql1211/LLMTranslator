@@ -44,6 +44,16 @@ NON_EMPTY_KEYS = (
     "model_name",
 )
 
+# 生成参数：配置项名 → Ollama 原生格式对应的 options 字段名
+GEN_PARAM_MAP = {
+    "temperature": "temperature",
+    "top_p": "top_p",
+    "top_k": "top_k",
+    "repetition_penalty": "repeat_penalty",
+    "max_tokens": "num_predict",
+}
+
+
 def load_config() -> dict:
     """读取 data/config.toml，文件缺失或解析失败时给出提示并退出"""
     if not os.path.exists(CONFIG_PATH):
@@ -95,6 +105,9 @@ RESULT_MAX_WIDTH = config["tooltip_result_max_width"]
 RESULT_MAX_HEIGHT = config["tooltip_result_max_height"]
 
 RESTORE_CLIPBOARD = config["restore_clipboard"]
+
+# 只在配置文件中写出的生成参数才会被发送，注释掉即使用服务端默认值
+GENERATION_PARAMS = {k: config[k] for k in GEN_PARAM_MAP if k in config}
 
 
 # 从 keyboard 创建 Controller 实例，用于模拟按键操作
@@ -281,6 +294,8 @@ def translate_with_llm(text: str) -> str:
     - api_key 为空 → Ollama 原生格式（/api/generate）
     - api_key 非空 → OpenAI 兼容格式（/v1/chat/completions）
 
+    生成参数（GENERATION_PARAMS）按格式转换后一并发送
+
     报错返回空串
     """
     prompt = PROMPT_TEMPLATE.format(target_lang=TARGET_LANG, input_text=text)
@@ -297,7 +312,9 @@ def translate_with_llm(text: str) -> str:
         payload = {
             "model": MODEL_NAME,
             "messages": [{"role": "user", "content": prompt}],
-            "stream": False
+            "stream": False,
+            # OpenAI 兼容格式的生成参数平铺在顶层，字段名与配置项一致
+            **GENERATION_PARAMS,
         }
         do_request = lambda: requests.post(chat_url, json=payload, headers=headers, timeout=30)
     else:
@@ -307,6 +324,11 @@ def translate_with_llm(text: str) -> str:
             "prompt": prompt,
             "stream": False
         }
+        if GENERATION_PARAMS:
+            # Ollama 原生格式的生成参数统一放在 options 中，且部分字段名与 OpenAI 不同
+            payload["options"] = {
+                GEN_PARAM_MAP[k]: v for k, v in GENERATION_PARAMS.items()
+            }
         do_request = lambda: requests.post(API_BASE_URL, json=payload, timeout=30)
 
     result_text = ""
