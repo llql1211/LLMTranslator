@@ -17,8 +17,11 @@ import requests
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(BASE_DIR, "data", "config.toml")
+DEFAULT_CONFIG_PATH = os.path.join(BASE_DIR, "data", "config.toml")
 CONFIG_EXAMPLE_PATH = os.path.join(BASE_DIR, "data", "config.example.toml")
+
+# 可用该环境变量指定其他配置文件，覆盖默认路径
+CONFIG_PATH_ENV_VAR = "LLMTRANSLATOR_CONFIG"
 
 # 必填配置项，缺失时直接报错退出
 REQUIRED_KEYS = (
@@ -54,38 +57,60 @@ GEN_PARAM_MAP = {
 }
 
 
-def load_config() -> dict:
-    """读取 data/config.toml，文件缺失或解析失败时给出提示并退出"""
-    if not os.path.exists(CONFIG_PATH):
-        print(f"未找到配置文件：{CONFIG_PATH}")
-        print("请复制模板后按需修改：")
-        print(f"    copy {CONFIG_EXAMPLE_PATH} {CONFIG_PATH}")
-        sys.exit(1)
+class ConfigError(Exception):
+    """配置文件缺失、格式错误或内容不合法"""
 
-    with open(CONFIG_PATH, "rb") as f:
-        try:
+
+def resolve_config_path(path: str | None = None) -> str:
+    """按 显式参数 → 环境变量 → 默认路径 的优先级确定配置文件位置"""
+    if path:
+        return path
+    return os.environ.get(CONFIG_PATH_ENV_VAR) or DEFAULT_CONFIG_PATH
+
+
+def load_config(path: str | None = None) -> dict:
+    """
+    读取并校验配置
+
+    出错时抛出 ConfigError，由调用方决定如何提示与退出
+    """
+    config_path = resolve_config_path(path)
+
+    if not os.path.exists(config_path):
+        raise ConfigError(
+            f"未找到配置文件：{config_path}\n"
+            "请复制模板后按需修改：\n"
+            f"    copy {CONFIG_EXAMPLE_PATH} {config_path}"
+        )
+
+    try:
+        with open(config_path, "rb") as f:
             config = tomllib.load(f)
-        except tomllib.TOMLDecodeError as e:
-            print(f"配置文件解析失败：{CONFIG_PATH}\n{e}")
-            sys.exit(1)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"配置文件解析失败：{config_path}\n{e}") from e
 
     missing = [k for k in REQUIRED_KEYS if k not in config]
     if missing:
-        print(f"配置文件缺少必要项：{', '.join(missing)}")
-        print(f"请参考模板：{CONFIG_EXAMPLE_PATH}")
-        sys.exit(1)
+        raise ConfigError(
+            f"配置文件缺少必要项：{', '.join(missing)}\n"
+            f"请参考模板：{CONFIG_EXAMPLE_PATH}"
+        )
 
     # 模板中将访问地址与模型名留空，需用户自行填写
     empty = [k for k in NON_EMPTY_KEYS if not config[k]]
     if empty:
-        print(f"以下配置项不能为空：{', '.join(empty)}")
-        print(f"请在 {CONFIG_PATH} 中填写")
-        sys.exit(1)
+        raise ConfigError(
+            f"以下配置项不能为空：{', '.join(empty)}\n请在 {config_path} 中填写"
+        )
 
     return config
 
 
-config = load_config()
+try:
+    config = load_config()
+except ConfigError as e:
+    print(e)
+    sys.exit(1)
 
 API_BASE_URL = config["base_url"]
 MODEL_NAME = config["model_name"]
