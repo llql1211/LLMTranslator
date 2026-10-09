@@ -2,3 +2,8 @@
 .vscode/
 .pixi/*
 !.pixi/config.toml
+
+# 本地配置（可能含 api_key），模板见 data/config.example.toml
+data/config.toml
+
+__pycache__/

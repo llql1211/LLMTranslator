@@ -1,0 +1,67 @@
+# LLMTranslator 配置模板
+#
+# 复制为同目录下的 config.toml 后按需修改：
+#     copy data\config.example.toml data\config.toml   （Windows）
+#     cp data/config.example.toml data/config.toml     （Linux/macOS）
+#
+# data/config.toml 已被 .gitignore 忽略，可安全填写 api_key。
+
+
+# ===== API =====
+
+# 翻译模型 API 地址
+#   - api_key 留空 → 按 Ollama 原生格式请求，此处填 /api/generate 地址
+#   - api_key 非空 → 按 OpenAI 兼容格式请求，此处填服务根地址即可
+#     （代码会自动补全为 /v1/chat/completions）
+base_url = ""
+
+# API 密钥；留空则使用 Ollama 原生格式
+api_key = ""
+
+# 模型名称
+model_name = ""
+
+
+# ===== 翻译 =====
+
+# 目标语言（如 “Chinese”）
+target_lang = "Chinese"
+
+# prompt 模板，使用 {target_lang} 和 {input_text} 占位符
+prompt_template = "将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}"
+
+
+# ===== 热键 =====
+
+# 翻译热键
+hotkey_translate = "<ctrl>+<shift>+e"
+
+# 退出热键
+hotkey_quit = "<ctrl>+<shift>+q"
+
+
+# ===== 弹窗 =====
+
+# 弹窗背景色，十六进制颜色值
+tooltip_background_color = "#FFFFE0"
+
+# 弹窗相对于鼠标光标的 X 偏移（像素）
+tooltip_offset_x = 20
+
+# 弹窗相对于鼠标光标的 Y 偏移（像素）
+tooltip_offset_y = 20
+
+# 翻译结果弹窗宽度（字符数）
+tooltip_result_max_width = 30
+
+# 翻译结果弹窗高度（行数）
+tooltip_result_max_height = 8
+
+# 错误提示弹窗的自动关闭时间（毫秒）
+tooltip_duration_ms = 1500
+
+
+# ===== 其他 =====
+
+# 获取选中文本后是否恢复剪贴板原有内容
+restore_clipboard = false

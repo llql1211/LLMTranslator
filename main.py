@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
 import re
 import signal
+import sys
 import threading
 import time
 import tkinter
+import tomllib
 from typing import Literal
 
 import pyautogui
@@ -16,25 +17,82 @@ import requests
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
-    config = json.load(f)
+CONFIG_PATH = os.path.join(BASE_DIR, "data", "config.toml")
+CONFIG_EXAMPLE_PATH = os.path.join(BASE_DIR, "data", "config.example.toml")
 
-API_BASE_URL = config["api"]["base_url"]
-MODEL_NAME = config["api"]["model_name"]
-API_KEY = config["api"]["api_key"]
+# 必填配置项，缺失时直接报错退出
+REQUIRED_KEYS = (
+    "base_url",
+    "api_key",
+    "model_name",
+    "target_lang",
+    "prompt_template",
+    "hotkey_translate",
+    "hotkey_quit",
+    "tooltip_background_color",
+    "tooltip_offset_x",
+    "tooltip_offset_y",
+    "tooltip_result_max_width",
+    "tooltip_result_max_height",
+    "tooltip_duration_ms",
+    "restore_clipboard",
+)
 
-TARGET_LANG = config["translation"]["target_lang"]
-PROMPT_TEMPLATE = config["translation"]["prompt_template"]
+# 必填且不能为空的配置项
+NON_EMPTY_KEYS = (
+    "base_url",
+    "model_name",
+)
 
-HOTKEY_TRANSLATE = config["hotkeys"]["translate"]
-HOTKEY_QUIT = config["hotkeys"]["quit"]
+def load_config() -> dict:
+    """读取 data/config.toml，文件缺失或解析失败时给出提示并退出"""
+    if not os.path.exists(CONFIG_PATH):
+        print(f"未找到配置文件：{CONFIG_PATH}")
+        print("请复制模板后按需修改：")
+        print(f"    copy {CONFIG_EXAMPLE_PATH} {CONFIG_PATH}")
+        sys.exit(1)
 
-TOOLTIP_DURATION = config["tooltip"]["duration_ms"]
-BACKGROUND_COLOR = config["tooltip"]["background_color"]
-TOOLTIP_OFFSET_X = config["tooltip"]["offset_x"]
-TOOLTIP_OFFSET_Y = config["tooltip"]["offset_y"]
-RESULT_MAX_WIDTH = config["tooltip"]["result_max_width"]
-RESULT_MAX_HEIGHT = config["tooltip"]["result_max_height"]
+    with open(CONFIG_PATH, "rb") as f:
+        try:
+            config = tomllib.load(f)
+        except tomllib.TOMLDecodeError as e:
+            print(f"配置文件解析失败：{CONFIG_PATH}\n{e}")
+            sys.exit(1)
+
+    missing = [k for k in REQUIRED_KEYS if k not in config]
+    if missing:
+        print(f"配置文件缺少必要项：{', '.join(missing)}")
+        print(f"请参考模板：{CONFIG_EXAMPLE_PATH}")
+        sys.exit(1)
+
+    # 模板中将访问地址与模型名留空，需用户自行填写
+    empty = [k for k in NON_EMPTY_KEYS if not config[k]]
+    if empty:
+        print(f"以下配置项不能为空：{', '.join(empty)}")
+        print(f"请在 {CONFIG_PATH} 中填写")
+        sys.exit(1)
+
+    return config
+
+
+config = load_config()
+
+API_BASE_URL = config["base_url"]
+MODEL_NAME = config["model_name"]
+API_KEY = config["api_key"]
+
+TARGET_LANG = config["target_lang"]
+PROMPT_TEMPLATE = config["prompt_template"]
+
+HOTKEY_TRANSLATE = config["hotkey_translate"]
+HOTKEY_QUIT = config["hotkey_quit"]
+
+TOOLTIP_DURATION = config["tooltip_duration_ms"]
+BACKGROUND_COLOR = config["tooltip_background_color"]
+TOOLTIP_OFFSET_X = config["tooltip_offset_x"]
+TOOLTIP_OFFSET_Y = config["tooltip_offset_y"]
+RESULT_MAX_WIDTH = config["tooltip_result_max_width"]
+RESULT_MAX_HEIGHT = config["tooltip_result_max_height"]
 
 RESTORE_CLIPBOARD = config["restore_clipboard"]
 
