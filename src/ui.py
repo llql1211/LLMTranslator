@@ -13,7 +13,44 @@ import tkinter
 import pyautogui
 from pynput import mouse
 
+from logger import error, info, warn
+
 STREAM_POLL_MS = 50
+
+
+def _blend_color(base: str, other: str, ratio: float) -> str:
+    """把两种 #RRGGBB 颜色按比例混合，ratio 为 other 所占份额"""
+    try:
+        b = [int(base[i:i + 2], 16) for i in (1, 3, 5)]
+        o = [int(other[i:i + 2], 16) for i in (1, 3, 5)]
+    except (ValueError, IndexError):
+        return base
+    return "#" + "".join(f"{round(x + (y - x) * ratio):02X}" for x, y in zip(b, o))
+
+
+def normalize_result(text: str) -> str:
+    """
+    整理模型输出，让结果弹窗里的排版更干净
+
+    - 统一换行符，去掉每行首尾空白
+    - 连续空行压成一个，保留段落结构
+    - 去掉整体首尾空行
+    """
+    lines = [line.strip() for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
+    cleaned: list[str] = []
+    blank = False
+    for line in lines:
+        if line.strip():
+            cleaned.append(line)
+            blank = False
+        elif not blank:
+            cleaned.append("")
+            blank = True
+    while cleaned and not cleaned[0]:
+        cleaned.pop(0)
+    while cleaned and not cleaned[-1]:
+        cleaned.pop()
+    return "\n".join(cleaned)
 
 
 @dataclass(frozen=True)
@@ -37,13 +74,48 @@ _TOOLTIP_CLEANUP: Callable[[], None] | None = None
 # 右上角常驻提示框
 _HINT_ROOT = None
 _HINT_LABEL = None
+_HINT_ACCENT = None
+
+# 状态 → (底色, 文字色, 左侧强调条颜色)
+_HINT_STYLES = {
+    "idle": ("#2B3038", "#F0F2F5", "#66BB6A"),
+    "busy": ("#1B3A4B", "#EAF6FF", "#29B6F6"),
+    "error": ("#452A2A", "#FFE9E9", "#EF5350"),
+    "exit": ("#33383F", "#E0E0E0", "#90A4AE"),
+}
+
+
+def _hint_style(msg: str) -> tuple[str, str, str]:
+    """根据提示文案挑选配色，让等待/翻译/出错/退出一眼可辨"""
+    # 先判错误：「翻译中断」也含「翻译中」，不能误判成忙碌
+    if any(key in msg for key in ("失败", "未获取", "中断", "错误")):
+        return _HINT_STYLES["error"]
+    if "翻译中" in msg:
+        return _HINT_STYLES["busy"]
+    if "退出" in msg:
+        return _HINT_STYLES["exit"]
+    return _HINT_STYLES["idle"]
+
+
+def _apply_hint_message(msg: str) -> None:
+    """在 Tk 线程内更新提示框的文本与配色"""
+    bg, fg, accent = _hint_style(msg)
+    try:
+        if _HINT_ROOT:
+            _HINT_ROOT.configure(bg=bg)
+        if _HINT_LABEL:
+            _HINT_LABEL.config(text=msg, bg=bg, fg=fg)
+        if _HINT_ACCENT:
+            _HINT_ACCENT.config(bg=accent)
+    except tkinter.TclError:
+        pass
 
 
 def set_hint_message(msg: str) -> None:
-    """线程安全地更新右上角常驻提示框的文本"""
+    """线程安全地更新右上角常驻提示框的文本与状态配色"""
     root = _HINT_ROOT
     if root and root.winfo_exists():
-        root.after(0, lambda: _HINT_LABEL.config(text=msg) if _HINT_LABEL else None)
+        root.after(0, lambda: _apply_hint_message(msg))
 
 
 def create_tooltip_window(
@@ -60,10 +132,14 @@ def create_tooltip_window(
     root.configure(bg=settings.background_color)
     root.geometry(f"+{x + settings.offset_x}+{y + settings.offset_y}")
 
+    # 边框与选中高亮都从主题色推导，浅色/深色背景都能自动适配
+    border = _blend_color(settings.background_color, settings.text_color, 0.3)
+    selection = _blend_color(settings.background_color, settings.text_color, 0.35)
+
     text_area = tk.Text(
         root,
         wrap=tk.WORD,
-        font=("Microsoft YaHei", 10),
+        font=("Microsoft YaHei", 11),
         width=w,
         height=h,
         relief=tk.FLAT,
@@ -72,8 +148,17 @@ def create_tooltip_window(
         # 文本光标跟随文字颜色，深色背景下不会留下一道刺眼的黑竖线
         insertbackground=settings.text_color,
         bd=0,
-        padx=5,
-        pady=5
+        padx=10,
+        pady=8,
+        # 段前/行间/段后留白，避免译文挤成一片
+        spacing1=2,
+        spacing2=3,
+        spacing3=2,
+        highlightthickness=1,
+        highlightbackground=border,
+        highlightcolor=border,
+        selectbackground=selection,
+        selectforeground=settings.text_color,
     )
     text_area.pack(fill=tk.BOTH, expand=True)
 
@@ -178,6 +263,7 @@ def show_tooltip(
     - 不抢焦点，点击弹窗内部可选中文本，鼠标悬停可滚动
     """
     global _TOOLTIP_ROOT, _TOOLTIP_TEXT, _TOOLTIP_CLEANUP
+    text = normalize_result(text)
 
     def safe_destroy(_event=None):
         """安全销毁窗口（接受可选 event 参数用于 bind 回调）"""
@@ -277,9 +363,10 @@ def show_streaming_tooltip(
 
         latest = drain()
         if latest is not None:
+            display = normalize_result(latest)
             text_area.delete("1.0", tkinter.END)
-            text_area.insert(tkinter.END, latest)
-            fit_tooltip_height(text_area, latest, w, h)
+            text_area.insert(tkinter.END, display)
+            fit_tooltip_height(text_area, display, w, h)
             text_area.see(tkinter.END)
 
         if not finished.is_set():
@@ -321,7 +408,7 @@ def show_streaming_tooltip(
     parts: list[str] = []
     failure: Exception | None = None
     try:
-        print("-> 翻译中（流式）... ")
+        info("开始流式接收译文")
         for chunk in chunks:
             if cancelled.is_set():
                 break
@@ -333,60 +420,65 @@ def show_streaming_tooltip(
         finished.set()
 
     if cancelled.is_set():
-        print("-> 翻译已中断")
+        warn("翻译已中断（用户关闭弹窗）")
         return None
 
-    result_text = "".join(parts)
+    result_text = normalize_result("".join(parts))
     if failure is not None:
-        print(f"-> 翻译中断：{failure} ")
+        error(f"翻译中断：{failure}")
     elif result_text == "":
-        print("-> 翻译失败")
+        warn("流式响应未返回任何内容")
     else:
-        print("-> 翻译成功：\n" + result_text)
+        info(f"译文接收完成，共 {len(result_text)} 字符")
 
     return result_text
 
 
 def show_startup_hint() -> None:
     """
-    显示/更新程序运行提示框（灰底半透明，常驻屏幕右上角，可拖动）
+    显示常驻右上角的状态提示框（无边框置顶、半透明、可拖动）
 
-    通过 Tkinter 窗口实现，无边框置顶显示
+    左侧的强调条会随状态变色：绿色等待、蓝色翻译中、红色出错、灰色退出
     """
-    global _HINT_ROOT, _HINT_LABEL
+    global _HINT_ROOT, _HINT_LABEL, _HINT_ACCENT
+
+    bg, fg, accent_color = _hint_style("等待快捷键...")
 
     root = tkinter.Tk()
     root.overrideredirect(True)
     root.attributes('-topmost', True)
-    root.attributes('-alpha', 0.80)  # 透明度 80%
-    root.configure(bg='#303030')
+    root.attributes('-alpha', 0.85)
+    root.configure(bg=bg)
 
-    # 获取屏幕尺寸
     root.update_idletasks()
     screen_width = root.winfo_screenwidth()
+
+    accent = tkinter.Frame(root, bg=accent_color, width=4)
+    accent.pack(side="left", fill="y", padx=(8, 0), pady=8)
 
     label = tkinter.Label(
         root,
         text="等待快捷键...",
-        font=("Microsoft YaHei", 10, "bold"),
-        bg='#303030',
-        fg='white',
+        font=("Microsoft YaHei", 11, "bold"),
+        bg=bg,
+        fg=fg,
         width=16,
         anchor="center",
-        padx=6,
-        pady=8
+        padx=8,
+        pady=9,
     )
-    label.pack()
+    label.pack(side="left", padx=(8, 10))
     root.update_idletasks()
 
     # 固定窗口宽度，不让文本变化导致窗口伸缩
-    win_w = label.winfo_reqwidth()
+    win_w = root.winfo_reqwidth()
 
     # 赋值到全局，供 set_hint_message() 使用
     _HINT_ROOT = root
     _HINT_LABEL = label
+    _HINT_ACCENT = accent
 
-    # 拖动功能
+    # 拖动功能：强调条与文字区域都可以拖动
     drag_data = {"x": 0, "y": 0}
 
     def on_mouse_down(event):
@@ -396,8 +488,9 @@ def show_startup_hint() -> None:
     def on_mouse_move(event):
         root.geometry(f"+{event.x_root - drag_data['x']}+{event.y_root - drag_data['y']}")
 
-    label.bind("<Button-1>", on_mouse_down)
-    label.bind("<B1-Motion>", on_mouse_move)
+    for widget in (label, accent):
+        widget.bind("<Button-1>", on_mouse_down)
+        widget.bind("<B1-Motion>", on_mouse_move)
 
     # 放在屏幕右上角
     root.geometry(f"+{screen_width - win_w - 250}+{30}")

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+import ui
+
 
 class FakeText:
     """只记录 height 设置的假 Text 控件"""
@@ -211,3 +215,42 @@ def test_fit_height_uses_configured_width(app):
     app._fit_tooltip_height(wide, "a" * 60, 60, 8)
 
     assert narrow.height > wide.height
+
+
+# ===== 外观与排版 =====
+
+
+def test_window_uses_larger_font_and_subtle_border(app, monkeypatch):
+    fake = create_window(app, monkeypatch)
+
+    assert fake.text.kwargs["font"] == ("Microsoft YaHei", 11)
+    assert fake.text.kwargs["highlightthickness"] == 1
+    assert fake.text.kwargs["padx"] == 10
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("  a  \r\n\r\n\r\nb  \n", "a\n\nb"),
+        ("\n\nhi\n\n", "hi"),
+        ("a\n\n\n\nb", "a\n\nb"),
+        ("", ""),
+    ],
+)
+def test_normalize_result_cleans_layout(raw, expected):
+    assert ui.normalize_result(raw) == expected
+
+
+@pytest.mark.parametrize(
+    ("message", "style"),
+    [
+        ("等待快捷键...", "idle"),
+        ("翻译中...", "busy"),
+        ("未获取到文本", "error"),
+        ("翻译失败", "error"),
+        ("翻译中断", "error"),
+        ("正在退出...", "exit"),
+    ],
+)
+def test_hint_style_matches_status(message, style):
+    assert ui._hint_style(message) == ui._HINT_STYLES[style]
