@@ -20,6 +20,7 @@ import pyperclip
 import requests
 
 import api, clipboard, hotkeys, text, ui
+from logger import Timer, error, info, report, shorten, warn
 from config import (
     CONFIG_EXAMPLE_PATH,
     CONFIG_PATH_ENV_VAR,
@@ -41,7 +42,7 @@ from hotkeys import parse_hotkey
 try:
     config_data = load_config()
 except ConfigError as e:
-    print(e)
+    error(str(e))
     sys.exit(1)
 
 active_model = resolve_active_model(config_data)
@@ -74,6 +75,9 @@ RESTORE_CLIPBOARD = config_data["restore_clipboard"]
 
 # 开：边翻译边显示；关：等整段翻完再一次性显示
 STREAM = config_data["stream"]
+
+# OpenAI 流式请求是否请服务端在末帧返回 token 统计；不兼容的服务可关掉
+STREAM_INCLUDE_USAGE = config_data.get("stream_include_usage", True)
 
 # 只在配置文件中写出的生成参数才会被发送，注释掉即使用服务端默认值
 GENERATION_PARAMS = {k: config_data[k] for k in GEN_PARAM_MAP if k in config_data}
@@ -110,7 +114,7 @@ def on_activate() -> None:
 
 def on_quit() -> None:
     """退出热键触发时的回调函数"""
-    print("\n正在退出...\n")
+    info("正在退出...")
     set_hint_message("正在退出...")
     # 不能只用 sys.exit()（守护线程中只退出线程），用 os._exit 强制结束整个进程
     threading.Thread(target=lambda: (time.sleep(0.5), os._exit(0)), daemon=True).start()
@@ -192,6 +196,7 @@ MAX_REDIRECTS = api.MAX_REDIRECTS
 REDIRECT_STATUS = api.REDIRECT_STATUS
 parse_ollama_stream_line = api.parse_ollama_stream_line
 parse_openai_stream_line = api.parse_openai_stream_line
+last_usage = api.last_usage
 
 
 def _api_settings() -> api.ApiSettings:
@@ -203,6 +208,7 @@ def _api_settings() -> api.ApiSettings:
         target_lang=TARGET_LANG,
         generation_params=GENERATION_PARAMS,
         extra_params=EXTRA_BODY,
+        include_stream_usage=STREAM_INCLUDE_USAGE,
     )
 
 
@@ -270,33 +276,39 @@ def show_startup_hint() -> None:
 
 
 def main() -> None:
-    print("-> 翻译热键触发 ", end="")
+    info("翻译热键触发")
     set_hint_message("翻译中...")
 
     selected = get_selected_text()
     if selected == "":
-        print("-> 未获取到选中文本，翻译取消")
+        warn("未获取到选中文本，翻译取消")
         set_hint_message("未获取到文本")
     else:
-        print("-> 已获取选中文本：\n" + selected)
+        info(f"选中文本：{shorten(selected)}")
+        timer = Timer()
         if STREAM:
             # 流式：内容边到边显示；返回 None 表示用户中途关掉了弹窗
             translation = show_streaming_tooltip(
                 translate_stream(selected), RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT
             )
-            if translation == "":
+            if translation is None:
+                info("翻译已取消")
+            elif translation == "":
+                warn("翻译失败")
                 show_tooltip("翻译失败", 15, 1, "timed")
+            else:
+                report(timer, last_usage())
         else:
             translation = translate_with_llm(selected)
             if translation == "":
-                print("-> 翻译失败")
+                warn("翻译失败")
                 show_tooltip("翻译失败", 15, 1, "timed")
             else:
-                print("-> 翻译成功：\n" + translation)
+                report(timer, last_usage())
                 show_tooltip(translation, RESULT_MAX_WIDTH, RESULT_MAX_HEIGHT, "persistent")
-                print(" -> 结果已显示")
+                info("结果已显示")
 
-    print("========\n\n等待快捷键... ", end="")
+    info("等待快捷键...")
     set_hint_message("等待快捷键...")
 
 
@@ -305,7 +317,7 @@ if __name__ == "__main__":
     threading.Thread(target=show_startup_hint, daemon=True).start()
 
     # 仅一次，输出提示信息
-    print("========\n等待快捷键... ", end="")
+    info("等待快捷键...")
 
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         listener.join()

@@ -7,6 +7,9 @@ target_lang = "Chinese"
 # 默认提示词：模型未写 prompt_template 时用它兜底
 prompt_template = "将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}"
 stream = true
+# OpenAI 兼容的流式请求是否请求服务端在末帧返回 token 统计。
+# 若服务端不支持 stream_options 而报错（400），改成 false 即可只统计耗时。
+stream_include_usage = true
 
 # ===== 生成参数 =====
 temperature = 0.7

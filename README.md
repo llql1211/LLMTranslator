@@ -63,6 +63,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | `target_lang` | 目标语言 | `Chinese` |
 | `prompt_template` | **默认提示词**：模型未写自己的提示词时用它兜底，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
 | `stream` | 流式输出。为 `true` 时边翻译边显示，弹窗随内容增长；为 `false` 时等整段翻完再一次性显示 | `true` |
+| `stream_include_usage` | OpenAI 流式请求是否请求末帧返回 token 统计；服务端不支持 `stream_options` 时改为 `false` | `true` |
 | `hotkey_translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
 | `hotkey_quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
 | `tooltip_background_color` | 弹窗背景色 | `#FFFFE0` |

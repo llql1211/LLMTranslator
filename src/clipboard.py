@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from logger import warn
+
 
 def get_selected_text(
     *,
@@ -38,7 +40,7 @@ def get_selected_text(
 
         return clean(clipboard.paste())
     except Exception as e:
-        print(f"-> 未获取选中文本，模拟 Ctrl+C 失败: {e} ")
+        warn(f"未获取选中文本，模拟 Ctrl+C 失败：{e}")
         return ""
     finally:
         # 显式释放所有修饰键
