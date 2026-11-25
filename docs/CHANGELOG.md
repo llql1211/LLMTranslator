@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### 新增
+
+- 译文弹窗字体与字号可通过 `tooltip_font_family` / `tooltip_font_size` 配置，未配置时沿用原内置字体
+
 ## [0.2.0] - 2026-11-25
 
 ### 新增

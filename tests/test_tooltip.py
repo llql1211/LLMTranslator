@@ -228,6 +228,24 @@ def test_window_uses_larger_font_and_subtle_border(app, monkeypatch):
     assert fake.text.kwargs["padx"] == 10
 
 
+def test_window_uses_configured_font(make_app, build_config, monkeypatch):
+    """字体与字号来自配置，而不是写死在代码里"""
+    app = make_app(build_config(tooltip_font_family="Consolas", tooltip_font_size=16))
+
+    assert app._ui_settings().font_family == "Consolas"
+    assert app._ui_settings().font_size == 16
+    fake = create_window(app, monkeypatch)
+    assert fake.text.kwargs["font"] == ("Consolas", 16)
+
+
+def test_window_uses_default_font_when_not_configured(make_app, build_config, missing, monkeypatch):
+    """旧配置没写字体/字号时仍沿用原来的内置字体"""
+    app = make_app(build_config(tooltip_font_family=missing, tooltip_font_size=missing))
+    fake = create_window(app, monkeypatch)
+
+    assert fake.text.kwargs["font"] == ("Microsoft YaHei", 11)
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

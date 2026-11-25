@@ -19,6 +19,9 @@ tooltip_offset_y = 20
 tooltip_result_max_width = 30
 tooltip_result_max_height = 8
 tooltip_duration_ms = 1500
+# 译文弹窗字体与字号（磅），重启后生效；字体名填本机已安装的字体
+tooltip_font_family = "Microsoft YaHei"
+tooltip_font_size = 11           # 建议 6~72
 # 旧字段，仅未设置 theme 时生效
 tooltip_background_color = "#FFFFE0"
 tooltip_text_color = "#000000"

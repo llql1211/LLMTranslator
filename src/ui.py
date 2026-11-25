@@ -62,6 +62,8 @@ class UiSettings:
     offset_x: int
     offset_y: int
     duration_ms: int
+    font_family: str
+    font_size: int
 
 
 # 全局 Tkinter 窗口，复用避免重复创建
@@ -150,7 +152,7 @@ def create_tooltip_window(
     text_area = tk.Text(
         root,
         wrap=tk.WORD,
-        font=("Microsoft YaHei", 11),
+        font=(settings.font_family, settings.font_size),
         width=w,
         height=h,
         relief=tk.FLAT,

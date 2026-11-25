@@ -39,6 +39,8 @@ BASE_CONFIG_VALUES: dict[str, object] = {
     "tooltip_result_max_width": 30,
     "tooltip_result_max_height": 8,
     "tooltip_duration_ms": 1500,
+    "tooltip_font_family": "Microsoft YaHei",
+    "tooltip_font_size": 11,
     "restore_clipboard": False,
     # 默认关，需要验证流式分支的用例自行打开
     "stream": False,

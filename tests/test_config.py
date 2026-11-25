@@ -108,6 +108,47 @@ def test_theme_is_optional(tmp_path, build_config):
     assert "theme" not in config
 
 
+@pytest.mark.parametrize(
+    "family",
+    ["", "   ", 123, True],
+)
+def test_invalid_font_family_is_rejected(tmp_path, build_config, family):
+    """字体名必须是非空字符串"""
+    path = write(tmp_path / "config.toml", build_config(tooltip_font_family=family))
+
+    with pytest.raises(main.ConfigError) as exc:
+        main.load_config(path)
+
+    assert "tooltip_font_family" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "size",
+    ["large", 5, 100, 11.5, True],
+)
+def test_invalid_font_size_is_rejected(tmp_path, build_config, size):
+    """字号必须是 6~72 的整数，布尔值也不算"""
+    path = write(tmp_path / "config.toml", build_config(tooltip_font_size=size))
+
+    with pytest.raises(main.ConfigError) as exc:
+        main.load_config(path)
+
+    assert "tooltip_font_size" in str(exc.value)
+
+
+def test_font_settings_are_optional(make_app, build_config, missing):
+    """旧配置没写字体/字号时沿用内置默认值，不报错"""
+    app = make_app(
+        build_config(
+            tooltip_font_family=missing,
+            tooltip_font_size=missing,
+        )
+    )
+
+    assert app.TOOLTIP_FONT_FAMILY == "Microsoft YaHei"
+    assert app.TOOLTIP_FONT_SIZE == 11
+
+
 def test_syntax_error_raises(tmp_path):
     """TOML 语法错误应有明确提示，而不是抛裸的 TOMLDecodeError"""
     path = write(tmp_path / "config.toml", 'base_url = "unterminated\n')
@@ -181,6 +222,15 @@ def test_example_config_declares_theme_and_dark_colors():
         "tooltip_text_color_dark",
     ):
         assert key in example
+
+
+def test_example_config_declares_font_settings():
+    """模板给出字体与字号，方便用户直接改"""
+    with open(EXAMPLE_CONFIG_PATH, "rb") as f:
+        example = tomllib.load(f)
+
+    assert example["tooltip_font_family"] == "Microsoft YaHei"
+    assert example["tooltip_font_size"] == 11
 
 
 def test_example_config_keeps_required_fields_blank():

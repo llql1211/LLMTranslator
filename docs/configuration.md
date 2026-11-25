@@ -33,7 +33,15 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | `tooltip_result_max_width` | 结果弹窗宽度（字符数） | `30` |
 | `tooltip_result_max_height` | 结果弹窗高度（行数），超出后内部滚动 | `8` |
 | `tooltip_duration_ms` | 错误提示弹窗自动关闭时间（毫秒） | `1500` |
+| `tooltip_font_family` | 译文弹窗字体名（本机已安装的字体） | `Microsoft YaHei` |
+| `tooltip_font_size` | 译文弹窗字号（磅），须为 6~72 的整数 | `11` |
 | `restore_clipboard` | 是否恢复翻译前的剪贴板内容 | `false` |
+
+## 译文字体与字号
+
+- `tooltip_font_family` 填字体名，例如 `"Microsoft YaHei"`、`"Consolas"`、`"Noto Sans CJK SC"`；本机没有该字体时由 Tk 回退，换字体需重启程序。
+- `tooltip_font_size` 填整数磅值，允许 6~72，默认 11；同样需重启后生效。
+- 只对译文弹窗生效，右上角状态提示框的字体不受影响。旧配置没写这两项时沿用内置默认值。
 
 ## 深浅模式
 

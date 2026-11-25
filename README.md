@@ -42,6 +42,7 @@
 | `prompt_template` | 默认提示词，可用 `{target_lang}` / `{input_text}` 占位符 | 见模板 |
 | `theme` | `light` / `dark`，切换后需重启 | `light` |
 | `stream` | 是否边翻译边显示 | `true` |
+| `tooltip_font_family` / `tooltip_font_size` | 译文弹窗字体与字号（磅），切换后需重启 | `Microsoft YaHei` / `11` |
 | `hotkey_translate` / `hotkey_quit` | 翻译 / 退出热键 | `<ctrl>+<shift>+e` / `<ctrl>+<shift>+q` |
 | `restore_clipboard` | 是否恢复翻译前的剪贴板内容 | `false` |
 

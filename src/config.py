@@ -45,6 +45,12 @@ NON_EMPTY_KEYS = ("base_url", "model_name")
 # 界面主题：light 用便签黄弹窗 + 白底提示框，dark 用深灰弹窗 + 深色提示框
 THEME_VALUES = ("light", "dark")
 
+# 译文弹窗字体与字号（磅）：旧配置未写时沿用原内置值，字号范围避免误填后弹窗不可用
+DEFAULT_FONT_FAMILY = "Microsoft YaHei"
+DEFAULT_FONT_SIZE = 11
+FONT_SIZE_MIN = 6
+FONT_SIZE_MAX = 72
+
 # 生成参数：配置项名 → Ollama 原生格式对应的 options 字段名
 GEN_PARAM_MAP = {
     "temperature": "temperature",
@@ -168,6 +174,20 @@ def load_config(path: str | None = None) -> dict:
 
     if config.get("theme", "light") not in THEME_VALUES:
         raise ConfigError(f"theme 只能是 light 或 dark：{config.get('theme')!r}")
+
+    font_family = config.get("tooltip_font_family", DEFAULT_FONT_FAMILY)
+    if not isinstance(font_family, str) or not font_family.strip():
+        raise ConfigError(f"tooltip_font_family 必须是非空字符串：{font_family!r}")
+
+    font_size = config.get("tooltip_font_size", DEFAULT_FONT_SIZE)
+    if (
+        isinstance(font_size, bool)
+        or not isinstance(font_size, int)
+        or not FONT_SIZE_MIN <= font_size <= FONT_SIZE_MAX
+    ):
+        raise ConfigError(
+            f"tooltip_font_size 必须是 {FONT_SIZE_MIN}~{FONT_SIZE_MAX} 的整数：{font_size!r}"
+        )
 
     if "platforms" not in config and "models" not in config:
         # 兼容旧格式：API 字段直接写在顶层

@@ -25,6 +25,8 @@ from config import (
     CONFIG_EXAMPLE_PATH,
     CONFIG_PATH_ENV_VAR,
     DEFAULT_CONFIG_PATH,
+    DEFAULT_FONT_FAMILY,
+    DEFAULT_FONT_SIZE,
     GEN_PARAM_MAP,
     NON_EMPTY_KEYS,
     REQUIRED_KEYS,
@@ -76,6 +78,9 @@ TOOLTIP_DARK_BG = config_data.get("tooltip_background_color_dark", "#2B2B2B")
 TOOLTIP_DARK_FG = config_data.get("tooltip_text_color_dark", "#EAEAEA")
 TOOLTIP_OFFSET_X = config_data["tooltip_offset_x"]
 TOOLTIP_OFFSET_Y = config_data["tooltip_offset_y"]
+# 旧配置没写字体/字号时沿用内置默认值
+TOOLTIP_FONT_FAMILY = config_data.get("tooltip_font_family", DEFAULT_FONT_FAMILY)
+TOOLTIP_FONT_SIZE = config_data.get("tooltip_font_size", DEFAULT_FONT_SIZE)
 RESULT_MAX_WIDTH = config_data["tooltip_result_max_width"]
 RESULT_MAX_HEIGHT = config_data["tooltip_result_max_height"]
 
@@ -266,6 +271,8 @@ def _ui_settings() -> ui.UiSettings:
         offset_x=TOOLTIP_OFFSET_X,
         offset_y=TOOLTIP_OFFSET_Y,
         duration_ms=TOOLTIP_DURATION,
+        font_family=TOOLTIP_FONT_FAMILY,
+        font_size=TOOLTIP_FONT_SIZE,
     )
 
 
