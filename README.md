@@ -5,6 +5,7 @@
 - [简介](#简介)
 - [工作流程](#工作流程)
 - [配置参数](#配置参数)
+- [命令行配置](#命令行配置)
 - [部署模型与配置 Ollama](#部署模型与配置-ollama)
 - [使用说明](#使用说明)
 - [平台支持](#平台支持)
@@ -164,6 +165,22 @@ prompt_template = "专用提示词：{input_text}"
 ```
 
 **注意**：`prompt_template` 需与所用模型匹配，模板不匹配会明显影响翻译质量。若不同模型需要不同模板，在对应模型里单独写 `prompt_template` 覆盖默认值即可。
+
+## 命令行配置
+
+不必手动编辑 TOML，可用命令行查看与修改配置（默认路径与程序启动时一致，也可用 `-c` 指定其他文件）：
+
+```bash
+pixi run config show                                  # 查看全部配置，密钥自动遮蔽
+pixi run config get target_lang                       # 读取单个配置项
+pixi run config set target_lang Japanese              # 修改顶层配置项
+pixi run config set models.example-local.model_name hy-mt  # 按 name 修改表数组中的项
+```
+
+- `set` 的值按 TOML 语法解析：`true`/`false`、数字、带引号的字符串会保持对应类型；未加引号的文本一律按字符串处理，所以 `#FFFFE0` 可直接写。
+- 修改是原地替换，原文件中的注释与排版会保留；键原本被注释掉或不存在时会自动补写。
+- 平台与模型用各自的 `name` 作为索引，例如 `platforms.example-ollama.base_url`。
+- 写入后会立即校验配置；若导致配置无效（如必填项被清空），会自动回滚并报错。
 
 ## 部署模型与配置 Ollama
 

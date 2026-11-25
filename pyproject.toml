@@ -25,6 +25,7 @@ default = { features = ["dev"] }
 [tool.pixi.tasks]
 start = "python src/main.py"
 test = "python -m pytest"
+config = "python src/cli.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
