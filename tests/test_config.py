@@ -16,7 +16,7 @@ import pytest
 
 import main
 
-EXAMPLE_CONFIG_PATH = Path(main.__file__).resolve().parent / "data" / "config.example.toml"
+EXAMPLE_CONFIG_PATH = Path(main.__file__).resolve().parents[1] / "data" / "config.example.toml"
 
 
 def write(path: Path, text: str) -> Path:

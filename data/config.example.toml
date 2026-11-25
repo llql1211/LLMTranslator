@@ -13,6 +13,8 @@
 #   - api_key 留空 → 按 Ollama 原生格式请求，此处填 /api/generate 地址
 #   - api_key 非空 → 按 OpenAI 兼容格式请求，此处填服务根地址即可
 #     （代码会自动补全为 /v1/chat/completions）
+# 建议直接用 https 地址：若服务把 http 重定向到 https，部分实现只接受 POST，
+# 跟随重定向时方法被改成 GET 会返回 405（本程序已尽量保持 POST，仍以 https 为准）
 base_url = ""
 
 # API 密钥；留空则使用 Ollama 原生格式

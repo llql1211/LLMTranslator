@@ -23,8 +23,9 @@ pytest = ">=8.0"
 default = { features = ["dev"] }
 
 [tool.pixi.tasks]
-start = "python main.py"
+start = "python src/main.py"
 test = "python -m pytest"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]

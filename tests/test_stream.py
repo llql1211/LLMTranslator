@@ -11,9 +11,11 @@ import pytest
 class FakeStreamResponse:
     """假流式响应：逐行产出给定内容，并记录是否被关闭"""
 
-    def __init__(self, lines=(), error: Exception | None = None):
+    def __init__(self, lines=(), error: Exception | None = None, status_code=200, headers=None):
         self._lines = list(lines)
         self._error = error
+        self.status_code = status_code
+        self.headers = headers or {}
         self.closed = False
 
     def raise_for_status(self):
@@ -42,7 +44,7 @@ def stream_post(app, monkeypatch):
     """替换 requests.post，返回记录调用信息的容器"""
     state = SimpleNamespace(calls=[], response=FakeStreamResponse())
 
-    def fake_post(url, json=None, headers=None, timeout=None, stream=False):
+    def fake_post(url, json=None, headers=None, timeout=None, stream=False, **kwargs):
         state.calls.append(
             SimpleNamespace(
                 url=url,
@@ -144,11 +146,17 @@ def test_non_stream_request_is_not_flagged(app, monkeypatch):
     state = SimpleNamespace(calls=[], payload=None)
 
     class FakeJsonResponse:
+        status_code = 200
+        headers = {}
+
         def raise_for_status(self):
             pass
 
         def json(self):
             return {"response": "好"}
+
+        def close(self):
+            pass
 
     def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(kwargs)

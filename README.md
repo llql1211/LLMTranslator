@@ -160,7 +160,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 
 2. 首次使用需将 `data/config.example.toml` 复制为 `data/config.toml`，随后按需修改配置项（详见[配置参数](#配置参数)）。
 
-3. 运行 `python main.py`。
+3. 运行 `python src/main.py`（或用 `pixi run start`）。
 
 4. 在任意应用中选中文本，按下翻译热键（默认 `Ctrl+Shift+E`），即可看到翻译结果弹窗。
 

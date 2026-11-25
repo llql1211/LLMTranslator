@@ -7,3 +7,6 @@
 data/config.toml
 
 __pycache__/
+
+# 临时诊断脚本，用完即删
+tmp/

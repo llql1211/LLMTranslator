@@ -27,6 +27,10 @@ SAMPLE_PARAGRAPH = Path(__file__).resolve().parent / "data" / "test_paragraph.tx
         # 多行混合
         ("Line one\nline two\nLine three", "Line one line two.\nLine three"),
         ("Ends with period.\nnew line", "Ends with period.\nnew line"),
+        # 空行是段落分隔，不能当成上一行来补句号
+        ("Hello\n\nWorld", "Hello\n\nWorld"),
+        ("Hello.\n\nWorld", "Hello.\n\nWorld"),
+        ("Hello\n\n\nWorld", "Hello\n\n\nWorld"),
     ],
 )
 def test_clean_english_text(app, raw, expected):

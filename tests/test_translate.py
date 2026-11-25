@@ -12,9 +12,14 @@ OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 class FakeResponse:
     """可配置返回体与 HTTP 错误的假响应"""
 
-    def __init__(self, body=None, error: Exception | None = None):
+    def __init__(self, body=None, error: Exception | None = None, status_code=200, headers=None):
         self._body = body
         self._error = error
+        self.status_code = status_code
+        self.headers = headers or {}
+
+    def close(self):
+        pass
 
     def raise_for_status(self):
         if self._error is not None:
@@ -33,7 +38,7 @@ def post(app, monkeypatch):
     """
     state = SimpleNamespace(calls=[], response=FakeResponse({}))
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(
             SimpleNamespace(url=url, payload=json, headers=headers, timeout=timeout)
         )
@@ -74,7 +79,7 @@ def test_ollama_options_from_config(make_app, build_config, monkeypatch):
     )
     state = SimpleNamespace(calls=[], response=FakeResponse({"response": "好"}))
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(SimpleNamespace(url=url, payload=json))
         return state.response
 
@@ -104,7 +109,7 @@ def test_partial_generation_params(make_app, build_config, monkeypatch):
     app = make_app(build_config(temperature=0.3, max_tokens=512))
     state = SimpleNamespace(calls=[], response=FakeResponse({"response": "好"}))
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(SimpleNamespace(url=url, payload=json))
         return state.response
 
@@ -150,7 +155,7 @@ def test_openai_generation_params_are_flattened(make_app, build_config, monkeypa
         response=FakeResponse({"choices": [{"message": {"content": "好"}}]}),
     )
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(SimpleNamespace(url=url, payload=json))
         return state.response
 
@@ -174,6 +179,10 @@ def test_openai_generation_params_are_flattened(make_app, build_config, monkeypa
             "http://localhost:11434/v1/chat/completions",
             "http://localhost:11434/v1/chat/completions",
         ),
+        # 域名恰好以 1 / v 结尾时不能被误当成 /v1 后缀裁掉
+        ("http://host1", "http://host1/v1/chat/completions"),
+        ("http://myv1", "http://myv1/v1/chat/completions"),
+        ("https://api.v1.com", "https://api.v1.com/v1/chat/completions"),
     ],
 )
 def test_openai_url_normalisation(app, post, monkeypatch, base_url, expected):
@@ -241,7 +250,7 @@ def test_prompt_uses_configured_template(make_app, build_config, monkeypatch):
     )
     state = SimpleNamespace(calls=[], response=FakeResponse({"response": "好"}))
 
-    def fake_post(url, json=None, headers=None, timeout=None):
+    def fake_post(url, json=None, headers=None, timeout=None, **kwargs):
         state.calls.append(SimpleNamespace(url=url, payload=json))
         return state.response
 
