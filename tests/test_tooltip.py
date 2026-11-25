@@ -17,6 +17,23 @@ class FakeText:
         self.height = kwargs.get("height")
 
 
+class FakeMeasuredText(FakeText):
+    """能返回真实折行数的假 Text 控件，用于验证按实际行数伸展"""
+
+    def __init__(self, display_lines):
+        super().__init__()
+        self.display_lines = display_lines
+
+    def winfo_width(self):
+        return 300
+
+    def update_idletasks(self):
+        pass
+
+    def count(self, _start, _end, _option):
+        return (self.display_lines,)
+
+
 class FakeRoot:
     """假 Tk 根窗口"""
 
@@ -205,6 +222,24 @@ def test_fit_height_never_below_one(app):
     app._fit_tooltip_height(area, "", 30, 8)
 
     assert area.height == 1
+
+
+def test_fit_height_uses_real_display_lines(app):
+    """字号与内边距会改变折行，按控件真实行数伸展才不会裁掉末行"""
+    area = FakeMeasuredText(3)
+
+    app._fit_tooltip_height(area, "全部 255 项测试通过。我先自查一下改动，再汇报结果。", 30, 8)
+
+    assert area.height == 3
+
+
+def test_fit_height_caps_real_display_lines(app):
+    """真实行数也要受 max_height 封顶"""
+    area = FakeMeasuredText(30)
+
+    app._fit_tooltip_height(area, "一" * 300, 30, 8)
+
+    assert area.height == 8
 
 
 def test_fit_height_uses_configured_width(app):

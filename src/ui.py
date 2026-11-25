@@ -257,8 +257,27 @@ def estimate_display_lines(text: str, width: int) -> int:
 
 
 def fit_tooltip_height(text_area, text: str, w: int, max_height: int) -> None:
-    """按内容估算高度，到 max_height 行封顶，超出部分靠内部滚动查看"""
-    text_area.config(height=max(1, min(max_height, estimate_display_lines(text, w))))
+    """
+    按内容真实折行数伸展，到 max_height 行封顶，超出部分靠内部滚动查看
+
+    字号、内边距和字体的实际宽度都会影响折行，粗略估算可能少算一行而裁掉末行；
+    控件已映射时直接问 Tk，未映射（或测试替身）时才退回估算。
+    """
+    lines = None
+    try:
+        # 先刷新布局：未刷新时控件宽度报 1、displaylines 也是过时值
+        text_area.update_idletasks()
+        if text_area.winfo_width() > 1:
+            lines = text_area.count("1.0", "end", "displaylines")[0]
+    except (AttributeError, IndexError, TypeError, tkinter.TclError):
+        pass
+    if lines is None:
+        lines = estimate_display_lines(text, w)
+    try:
+        text_area.config(height=max(1, min(max_height, lines)))
+    except tkinter.TclError:
+        # 延迟回调执行时窗口可能已被关掉
+        pass
 
 
 def show_tooltip(
@@ -303,9 +322,11 @@ def show_tooltip(
             if _TOOLTIP_CLEANUP:
                 _TOOLTIP_CLEANUP()
             root.geometry(f"+{x + settings.offset_x}+{y + settings.offset_y}")
-            text_area.config(height=h, width=w)
+            text_area.config(width=w)
             text_area.delete(1.0, tkinter.END)
             text_area.insert(tkinter.END, text)
+            # 窗口映射后再按真实折行数伸展
+            root.after(0, lambda: fit_tooltip_height(text_area, text, w, h))
             _TOOLTIP_CLEANUP = attach_close_handlers(root, safe_destroy, mode, settings)
             root.lift()
             return
@@ -313,6 +334,7 @@ def show_tooltip(
         # 首次创建窗口
         root, text_area = create_tooltip_window(x, y, w, h, settings)
         text_area.insert(tkinter.END, text)
+        root.after(0, lambda: fit_tooltip_height(text_area, text, w, h))
 
         _TOOLTIP_ROOT = root
         _TOOLTIP_TEXT = text_area
@@ -411,7 +433,8 @@ def show_streaming_tooltip(
         _TOOLTIP_CLEANUP = attach_close_handlers(root, safe_destroy, "persistent", settings)
 
         window_ready.set()
-        poll()
+        # 放到 mainloop 里执行，确保第一次测量时窗口已经完成布局
+        root.after(0, poll)
         root.mainloop()
 
     threading.Thread(target=create_and_run, daemon=True).start()
