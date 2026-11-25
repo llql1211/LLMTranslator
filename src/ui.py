@@ -75,26 +75,37 @@ _TOOLTIP_CLEANUP: Callable[[], None] | None = None
 _HINT_ROOT = None
 _HINT_LABEL = None
 _HINT_ACCENT = None
+_HINT_THEME = "light"
 
-# 状态 → (底色, 文字色, 左侧强调条颜色)
+# 主题 → 状态 → (底色, 文字色, 左侧强调条颜色)
+# 浅色模式统一白底，靠文字色与左侧强调条区分状态；深色模式沿用原有的深色配色
 _HINT_STYLES = {
-    "idle": ("#2B3038", "#F0F2F5", "#66BB6A"),
-    "busy": ("#1B3A4B", "#EAF6FF", "#29B6F6"),
-    "error": ("#452A2A", "#FFE9E9", "#EF5350"),
-    "exit": ("#33383F", "#E0E0E0", "#90A4AE"),
+    "light": {
+        "idle": ("#FFFFFF", "#24292F", "#2E7D32"),
+        "busy": ("#FFFFFF", "#24292F", "#1976D2"),
+        "error": ("#FFFFFF", "#B3261E", "#D32F2F"),
+        "exit": ("#FFFFFF", "#6B7280", "#9CA3AF"),
+    },
+    "dark": {
+        "idle": ("#2B3038", "#F0F2F5", "#66BB6A"),
+        "busy": ("#1B3A4B", "#EAF6FF", "#29B6F6"),
+        "error": ("#452A2A", "#FFE9E9", "#EF5350"),
+        "exit": ("#33383F", "#E0E0E0", "#90A4AE"),
+    },
 }
 
 
-def _hint_style(msg: str) -> tuple[str, str, str]:
-    """根据提示文案挑选配色，让等待/翻译/出错/退出一眼可辨"""
+def _hint_style(msg: str, theme: str | None = None) -> tuple[str, str, str]:
+    """根据提示文案与主题挑选配色，让等待/翻译/出错/退出一眼可辨"""
+    palette = _HINT_STYLES.get(theme or _HINT_THEME, _HINT_STYLES["light"])
     # 先判错误：「翻译中断」也含「翻译中」，不能误判成忙碌
     if any(key in msg for key in ("失败", "未获取", "中断", "错误")):
-        return _HINT_STYLES["error"]
+        return palette["error"]
     if "翻译中" in msg:
-        return _HINT_STYLES["busy"]
+        return palette["busy"]
     if "退出" in msg:
-        return _HINT_STYLES["exit"]
-    return _HINT_STYLES["idle"]
+        return palette["exit"]
+    return palette["idle"]
 
 
 def _apply_hint_message(msg: str) -> None:
@@ -434,15 +445,17 @@ def show_streaming_tooltip(
     return result_text
 
 
-def show_startup_hint() -> None:
+def show_startup_hint(theme: str = "light") -> None:
     """
     显示常驻右上角的状态提示框（无边框置顶、半透明、可拖动）
 
-    左侧的强调条会随状态变色：绿色等待、蓝色翻译中、红色出错、灰色退出
+    左侧的强调条会随状态变色：绿色等待、蓝色翻译中、红色出错、灰色退出；
+    浅色模式为白底深字，深色模式为深色底浅色字
     """
-    global _HINT_ROOT, _HINT_LABEL, _HINT_ACCENT
+    global _HINT_ROOT, _HINT_LABEL, _HINT_ACCENT, _HINT_THEME
 
-    bg, fg, accent_color = _hint_style("等待快捷键...")
+    _HINT_THEME = theme if theme in _HINT_STYLES else "light"
+    bg, fg, accent_color = _hint_style("等待快捷键...", _HINT_THEME)
 
     root = tkinter.Tk()
     root.overrideredirect(True)

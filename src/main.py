@@ -66,6 +66,14 @@ HOTKEY_QUIT = config_data["hotkey_quit"]
 TOOLTIP_DURATION = config_data["tooltip_duration_ms"]
 BACKGROUND_COLOR = config_data["tooltip_background_color"]
 TEXT_COLOR = config_data["tooltip_text_color"]
+
+# 深浅主题：显式设置 theme 后用主题专属配色；未设置时才用上面的旧字段兼容老配置
+THEME = config_data.get("theme", "light")
+THEME_SET = "theme" in config_data
+TOOLTIP_LIGHT_BG = config_data.get("tooltip_background_color_light", "#FFFFE0")
+TOOLTIP_LIGHT_FG = config_data.get("tooltip_text_color_light", "#000000")
+TOOLTIP_DARK_BG = config_data.get("tooltip_background_color_dark", "#2B2B2B")
+TOOLTIP_DARK_FG = config_data.get("tooltip_text_color_dark", "#EAEAEA")
 TOOLTIP_OFFSET_X = config_data["tooltip_offset_x"]
 TOOLTIP_OFFSET_Y = config_data["tooltip_offset_y"]
 RESULT_MAX_WIDTH = config_data["tooltip_result_max_width"]
@@ -236,10 +244,25 @@ STREAM_POLL_MS = ui.STREAM_POLL_MS
 estimate_display_lines = ui.estimate_display_lines
 
 
+def _tooltip_colors() -> tuple[str, str]:
+    """
+    按当前主题取弹窗配色
+
+    - 显式写了 theme：用主题专属配色，旧字段不再干扰（避免旧配置里的深色值把浅色模式带偏）
+    - 没写 theme：沿用旧的 tooltip_background_color / tooltip_text_color，保持向后兼容
+    """
+    if THEME == "dark":
+        return TOOLTIP_DARK_BG, TOOLTIP_DARK_FG
+    if THEME_SET:
+        return TOOLTIP_LIGHT_BG, TOOLTIP_LIGHT_FG
+    return BACKGROUND_COLOR, TEXT_COLOR
+
+
 def _ui_settings() -> ui.UiSettings:
+    background_color, text_color = _tooltip_colors()
     return ui.UiSettings(
-        background_color=BACKGROUND_COLOR,
-        text_color=TEXT_COLOR,
+        background_color=background_color,
+        text_color=text_color,
         offset_x=TOOLTIP_OFFSET_X,
         offset_y=TOOLTIP_OFFSET_Y,
         duration_ms=TOOLTIP_DURATION,
@@ -267,7 +290,7 @@ def show_streaming_tooltip(chunks, w: int, h: int):
 
 
 def show_startup_hint() -> None:
-    ui.show_startup_hint()
+    ui.show_startup_hint(theme=THEME)
 
 
 # --------------------------------------------------------------------------

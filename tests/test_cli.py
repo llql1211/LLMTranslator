@@ -154,6 +154,21 @@ def test_set_adds_missing_nested_field(config_path):
     assert config.load_config(config_path)["models"][0]["extra_body"] == {}
 
 
+def test_set_theme_into_dark_mode(config_path):
+    assert cli.main(["-c", config_path, "set", "theme", "dark"]) == 0
+
+    assert config.load_config(config_path)["theme"] == "dark"
+
+
+def test_invalid_theme_is_rolled_back(config_path, capsys):
+    original = read(config_path)
+
+    assert cli.main(["-c", config_path, "set", "theme", "pink"]) == 1
+
+    assert read(config_path) == original
+    assert "theme" in capsys.readouterr().err
+
+
 def test_invalid_semantic_value_rolls_back(config_path, capsys):
     original = read(config_path)
 

@@ -91,6 +91,23 @@ def test_empty_required_key_raises(tmp_path, build_config):
     assert "model_name" in message
 
 
+def test_invalid_theme_is_rejected(tmp_path, build_config):
+    """theme 只接受 light / dark，拼错时给出明确提示"""
+    path = write(tmp_path / "config.toml", build_config(theme="pink"))
+
+    with pytest.raises(main.ConfigError) as exc:
+        main.load_config(path)
+
+    assert "theme" in str(exc.value)
+
+
+def test_theme_is_optional(tmp_path, build_config):
+    """旧配置没写 theme 时默认浅色，不报错"""
+    config = main.load_config(write(tmp_path / "config.toml", build_config()))
+
+    assert "theme" not in config
+
+
 def test_syntax_error_raises(tmp_path):
     """TOML 语法错误应有明确提示，而不是抛裸的 TOMLDecodeError"""
     path = write(tmp_path / "config.toml", 'base_url = "unterminated\n')
@@ -149,6 +166,21 @@ def test_example_config_covers_code_requirements():
 
     assert set(main.REQUIRED_KEYS) <= set(example)
     assert set(main.GEN_PARAM_MAP) <= set(example)
+
+
+def test_example_config_declares_theme_and_dark_colors():
+    """模板要同时给出主题开关与深色配色，方便用户直接改"""
+    with open(EXAMPLE_CONFIG_PATH, "rb") as f:
+        example = tomllib.load(f)
+
+    assert example["theme"] == "light"
+    for key in (
+        "tooltip_background_color_light",
+        "tooltip_text_color_light",
+        "tooltip_background_color_dark",
+        "tooltip_text_color_dark",
+    ):
+        assert key in example
 
 
 def test_example_config_keeps_required_fields_blank():

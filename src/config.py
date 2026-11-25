@@ -42,6 +42,9 @@ MODEL_REQUIRED_KEYS = ("name", "platform", "model_name")
 # 必填且不能为空的字段
 NON_EMPTY_KEYS = ("base_url", "model_name")
 
+# 界面主题：light 用便签黄弹窗 + 白底提示框，dark 用深灰弹窗 + 深色提示框
+THEME_VALUES = ("light", "dark")
+
 # 生成参数：配置项名 → Ollama 原生格式对应的 options 字段名
 GEN_PARAM_MAP = {
     "temperature": "temperature",
@@ -162,6 +165,9 @@ def load_config(path: str | None = None) -> dict:
             f"配置文件缺少必要项：{', '.join(missing)}\n"
             f"请参考模板：{CONFIG_EXAMPLE_PATH}"
         )
+
+    if config.get("theme", "light") not in THEME_VALUES:
+        raise ConfigError(f"theme 只能是 light 或 dark：{config.get('theme')!r}")
 
     if "platforms" not in config and "models" not in config:
         # 兼容旧格式：API 字段直接写在顶层

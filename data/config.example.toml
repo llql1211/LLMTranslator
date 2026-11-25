@@ -11,6 +11,10 @@ stream = true
 # 若服务端不支持 stream_options 而报错（400），改成 false 即可只统计耗时。
 stream_include_usage = true
 
+# ===== 外观 =====
+# light：便签黄弹窗 + 白底提示框；dark：深灰弹窗 + 深色提示框。切换后需重启程序
+theme = "light"
+
 # ===== 生成参数 =====
 temperature = 0.7
 top_p = 0.6
@@ -23,8 +27,14 @@ hotkey_translate = "<ctrl>+<shift>+e"
 hotkey_quit = "<ctrl>+<shift>+q"
 
 # ===== 弹窗 =====
+# 以下两项仅在未设置 theme 时生效（兼容旧配置）；设置 theme 后请用下面两套主题配色
 tooltip_background_color = "#FFFFE0"
 tooltip_text_color = "#000000"
+# 主题专属配色：theme = "light" 用 light 两项，theme = "dark" 用 dark 两项
+tooltip_background_color_light = "#FFFFE0"
+tooltip_text_color_light = "#000000"
+tooltip_background_color_dark = "#2B2B2B"
+tooltip_text_color_dark = "#EAEAEA"
 tooltip_offset_x = 20
 tooltip_offset_y = 20
 tooltip_result_max_width = 30

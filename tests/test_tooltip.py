@@ -253,4 +253,20 @@ def test_normalize_result_cleans_layout(raw, expected):
     ],
 )
 def test_hint_style_matches_status(message, style):
-    assert ui._hint_style(message) == ui._HINT_STYLES[style]
+    assert ui._hint_style(message, "light") == ui._HINT_STYLES["light"][style]
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["等待快捷键...", "翻译中...", "未获取到文本", "翻译失败", "翻译中断", "正在退出..."],
+)
+def test_light_hint_always_has_white_background(message):
+    """浅色模式的提示框保持白底，仅靠文字与强调条区分状态"""
+    bg, _fg, _accent = ui._hint_style(message, "light")
+
+    assert bg == "#FFFFFF"
+
+
+def test_dark_hint_uses_dark_palette():
+    assert ui._hint_style("翻译中...", "dark") == ui._HINT_STYLES["dark"]["busy"]
+    assert ui._hint_style("等待快捷键...", "dark") == ui._HINT_STYLES["dark"]["idle"]
