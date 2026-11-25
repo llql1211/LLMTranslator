@@ -1,98 +1,62 @@
 # LLMTranslator 配置模板
-#
-# 复制为同目录下的 config.toml 后按需修改：
-#     copy data\config.example.toml data\config.toml   （Windows）
-#     cp data/config.example.toml data/config.toml     （Linux/macOS）
-#
-# data/config.toml 已被 .gitignore 忽略，可安全填写 api_key。
-
-
-# ===== API =====
-
-# 翻译模型 API 地址
-#   - api_key 留空 → 按 Ollama 原生格式请求，此处填 /api/generate 地址
-#   - api_key 非空 → 按 OpenAI 兼容格式请求，此处填服务根地址即可
-#     （代码会自动补全为 /v1/chat/completions）
-# 建议直接用 https 地址：若服务把 http 重定向到 https，部分实现只接受 POST，
-# 跟随重定向时方法被改成 GET 会返回 405（本程序已尽量保持 POST，仍以 https 为准）
-base_url = ""
-
-# API 密钥；留空则使用 Ollama 原生格式
-api_key = ""
-
-# 模型名称
-model_name = ""
-
+# 复制为同目录下的 config.toml 后按需修改（该文件已被 .gitignore 忽略，可安全填写 api_key）。
+# 各项含义见 README.md；生成参数「写了才发送」，注释掉即使用服务端默认值。
 
 # ===== 翻译 =====
-
-# 目标语言（如 “Chinese”）
 target_lang = "Chinese"
-
-# prompt 模板，使用 {target_lang} 和 {input_text} 占位符
+# 默认提示词：模型未写 prompt_template 时用它兜底
 prompt_template = "将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}"
-
-# 流式输出：true 边翻译边显示，false 等整段翻完再一次性显示
 stream = true
 
-
 # ===== 生成参数 =====
-#
-# 以下参数采用「写了才发送」的策略：注释掉某一行，该参数就不会出现在请求中。
-#   - 全部注释掉则完全使用服务端默认值。
-#   - 改用校验严格的云端 API 时，建议注释掉 top_k 和 repetition_penalty，
-#     这两个是 Ollama 扩展参数，部分服务商会返回 400。
-
-# 采样温度，越高越随机（0 ~ 2）
 temperature = 0.7
-
-# 核采样阈值（0 ~ 1）
 top_p = 0.6
-
-# 采样时仅保留概率最高的 K 个词（Ollama 扩展参数）
-top_k = 20
-
-# 重复惩罚系数，大于 1 可抑制重复（Ollama 扩展参数）
-repetition_penalty = 1.05
-
-# 单次生成的最大 token 数
+top_k = 20               # Ollama 扩展参数，严格校验的云端 API 可注释掉
+repetition_penalty = 1.05  # 同上
 max_tokens = 4096
 
-
 # ===== 热键 =====
-
-# 翻译热键
 hotkey_translate = "<ctrl>+<shift>+e"
-
-# 退出热键
 hotkey_quit = "<ctrl>+<shift>+q"
 
-
 # ===== 弹窗 =====
-
-# 弹窗背景色，十六进制颜色值
 tooltip_background_color = "#FFFFE0"
-
-# 弹窗文本颜色，十六进制颜色值
 tooltip_text_color = "#000000"
-
-# 弹窗相对于鼠标光标的 X 偏移（像素）
 tooltip_offset_x = 20
-
-# 弹窗相对于鼠标光标的 Y 偏移（像素）
 tooltip_offset_y = 20
-
-# 翻译结果弹窗宽度（字符数）
 tooltip_result_max_width = 30
-
-# 翻译结果弹窗高度（行数）
 tooltip_result_max_height = 8
-
-# 错误提示弹窗的自动关闭时间（毫秒）
 tooltip_duration_ms = 1500
 
-
 # ===== 其他 =====
-
-# 获取选中文本后是否恢复剪贴板原有内容
 restore_clipboard = false
+
+# ===== 平台与模型（表格数组必须放在文件末尾，且先平台后模型，不能交叉）=====
+# active_model 指定当前使用的模型名，留空则用第一个模型。
+active_model = "example-cloud"
+
+# 平台：API 地址与密钥。api_key 留空 → Ollama 原生格式，base_url 填 /api/generate 地址；
+# api_key 非空 → OpenAI 兼容格式，base_url 填服务根地址（自动补全 /v1/chat/completions）。
+# 建议用 https：http 被 301 到 https 时部分服务只接受 POST，方法改写会报错。
+[[platforms]]
+name = "example-paratera"
+base_url = ""
+api_key = ""
+
+[[platforms]]
+name = "example-ollama"
+base_url = "http://localhost:11434/api/generate"
+api_key = ""
+
+# 模型：模型名与可选提示词，通过 platform 引用上面的平台名。
+[[models]]
+name = "example-cloud"
+platform = "example-paratera"
+model_name = ""
+# prompt_template = "该模型专用提示词：{input_text}"
+
+[[models]]
+name = "example-local"
+platform = "example-ollama"
+model_name = "hy-mt"
+# prompt_template = "<｜hy_begin▁of▁sentence｜>...{input_text}..."

@@ -152,34 +152,31 @@ def test_example_config_covers_code_requirements():
 
 
 def test_example_config_keeps_required_fields_blank():
-    """模板中 base_url 与 model_name 应留空，由使用者自行填写"""
+    """模板中第一个平台的地址/密钥与第一个模型的名称应留空，由使用者填写"""
     with open(EXAMPLE_CONFIG_PATH, "rb") as f:
         example = tomllib.load(f)
 
-    assert example["base_url"] == ""
-    assert example["model_name"] == ""
+    assert example["platforms"][0]["base_url"] == ""
+    assert example["platforms"][0]["api_key"] == ""
+    assert example["models"][0]["model_name"] == ""
 
 
-def test_example_config_is_loadable_once_filled(tmp_path):
+def test_example_config_is_loadable_once_filled(tmp_path, build_config):
     """模板填上必填项后应能正常加载"""
-    with open(EXAMPLE_CONFIG_PATH, "rb") as f:
-        example = tomllib.load(f)
+    text = build_config() + '''
+active_model = "demo"
 
-    example["base_url"] = "http://localhost:11434/api/generate"
-    example["model_name"] = "demo"
-    path = write(tmp_path / "config.toml", dump_toml(example))
+[[platforms]]
+name = "cloud"
+base_url = "https://example.com"
+api_key = "sk-test"
 
-    assert main.load_config(path)["model_name"] == "demo"
+[[models]]
+name = "demo"
+platform = "cloud"
+model_name = "demo-model"
+'''
+    path = write(tmp_path / "config.toml", text)
 
-
-def dump_toml(values: dict) -> str:
-    """极简 TOML 序列化，仅覆盖本项目用到的标量类型"""
-    lines = []
-    for key, value in values.items():
-        if isinstance(value, bool):
-            lines.append(f"{key} = {str(value).lower()}")
-        elif isinstance(value, str):
-            lines.append(f'{key} = "{value}"')
-        else:
-            lines.append(f"{key} = {value}")
-    return "\n".join(lines) + "\n"
+    config = main.load_config(path)
+    assert main.resolve_active_model(config)["model_name"] == "demo-model"

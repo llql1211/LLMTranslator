@@ -29,6 +29,7 @@ from config import (
     REQUIRED_KEYS,
     ConfigError,
     load_config,
+    resolve_active_model,
     resolve_config_path,
 )
 from hotkeys import parse_hotkey
@@ -43,12 +44,17 @@ except ConfigError as e:
     print(e)
     sys.exit(1)
 
-API_BASE_URL = config_data["base_url"]
-MODEL_NAME = config_data["model_name"]
-API_KEY = config_data["api_key"]
+active_model = resolve_active_model(config_data)
+ACTIVE_MODEL_NAME = active_model["name"]
+ACTIVE_PLATFORM_NAME = active_model["platform"]
+
+API_BASE_URL = active_model["base_url"]
+API_KEY = active_model.get("api_key", "")
+MODEL_NAME = active_model["model_name"]
 
 TARGET_LANG = config_data["target_lang"]
-PROMPT_TEMPLATE = config_data["prompt_template"]
+# 模型未写提示词时，用顶层默认提示词兜底
+PROMPT_TEMPLATE = active_model.get("prompt_template") or config_data["prompt_template"]
 
 HOTKEY_TRANSLATE = config_data["hotkey_translate"]
 HOTKEY_QUIT = config_data["hotkey_quit"]

@@ -53,15 +53,15 @@ copy data\config.example.toml data\config.toml   # Windows
 cp data/config.example.toml data/config.toml     # Linux/macOS
 ```
 
-模板 `data/config.example.toml` 中每一项都带有注释说明。其中 `base_url` 与 `model_name` 为**必填项**，模板中留空，需自行填写；其余各项均有可用默认值。各字段含义如下：
+模板 `data/config.example.toml` 中每一项都带有注释说明。平台（API 地址/密钥）与模型（模型名/提示词）分开配置，模型通过 `platform` 引用平台；其余各项均有可用默认值。各字段含义如下：
 
 | 字段 | 说明 | 模板默认值 |
 | :--- | :--- | :--- |
-| `base_url` | **必填**。翻译模型 API 地址。`api_key` 留空时填 Ollama 的 `/api/generate` 地址（如 `http://localhost:11434/api/generate`）；`api_key` 非空时填服务根地址即可（自动补全为 `/v1/chat/completions`） | `""` |
-| `api_key` | API 密钥（留空用 Ollama 原生格式，非空切换 OpenAI 兼容格式） | `""` |
-| `model_name` | **必填**。模型名称，如在 Ollama 中创建的模型名 | `""` |
+| `platforms` | **必填**。平台列表，每档含 `name`、`base_url`、`api_key`，见下方「平台与模型」 | 见模板 |
+| `models` | **必填**。模型列表，每个含 `name`、`platform`、`model_name` 及可选的 `prompt_template` | 见模板 |
+| `active_model` | 当前使用的模型名称；留空则用第一个模型 | `example-cloud` |
 | `target_lang` | 目标语言 | `Chinese` |
-| `prompt_template` | 发送给模型的 prompt 模板，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
+| `prompt_template` | **默认提示词**：模型未写自己的提示词时用它兜底，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
 | `stream` | 流式输出。为 `true` 时边翻译边显示，弹窗随内容增长；为 `false` 时等整段翻完再一次性显示 | `true` |
 | `hotkey_translate` | 翻译热键（见下方注释） | `<ctrl>+<shift>+e` |
 | `hotkey_quit` | 退出热键（见下方注释） | `<ctrl>+<shift>+q` |
@@ -73,6 +73,50 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | `tooltip_result_max_height` | 翻译结果弹窗高度（行数） | `8` |
 | `tooltip_duration_ms` | 错误提示弹窗的自动关闭时间（毫秒） | `1500` |
 | `restore_clipboard` | 是否在获取文本后恢复原始剪贴板内容 | `false` |
+
+### 平台与模型
+
+平台负责「怎么连」，模型负责「用哪个、怎么问」。同一个平台下可以挂多个模型；切换模型需改配置后重启程序（暂无运行期切换热键）。
+
+平台字段（`[[platforms]]`）：
+
+- `name`：平台名，供模型引用，不可重复
+- `base_url`：API 地址。`api_key` 为空时填 Ollama 的 `/api/generate` 地址；非空时填服务根地址即可，程序自动补全 `/v1/chat/completions`。建议直接用 `https`，避免 http→https 重定向导致 405
+- `api_key`：API 密钥，留空则走 Ollama 原生格式
+
+模型字段（`[[models]]`）：
+
+- `name`：模型配置名，供 `active_model` 引用，不可重复
+- `platform`：依赖的平台名，必须是上面已有的平台
+- `model_name`：实际传给 API 的模型名称
+- `prompt_template`（可选）：该模型专用提示词，不写则用顶层默认提示词
+
+```toml
+active_model = "cloud"
+
+[[platforms]]
+name = "paratera"
+base_url = "https://api.example.com"
+api_key = "sk-xxx"
+
+[[platforms]]
+name = "ollama"
+base_url = "http://localhost:11434/api/generate"
+api_key = ""
+
+[[models]]
+name = "cloud"
+platform = "paratera"
+model_name = "my-model"
+
+[[models]]
+name = "local"
+platform = "ollama"
+model_name = "hy-mt"
+prompt_template = "专用提示词：{input_text}"
+```
+
+**注意**：`[[platforms]]` 与 `[[models]]` 属于 TOML 表格数组，必须放在配置文件末尾、先平台后模型且不能交叉，否则其后的配置项会被归入最后一个表格。
 
 ### 生成参数
 
@@ -98,13 +142,13 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 
 - 若 `restore_clipboard` 设为 `true`，翻译操作不会覆盖剪贴板原有内容。
 
-- 若 `api_key` 非空，程序会自动将请求地址切换为 OpenAI 兼容格式。
+- 若当前模型引用的平台 `api_key` 非空，程序会自动将请求格式切换为 OpenAI 兼容格式。
 
 - 结果弹窗点击外部或按 `Esc` 关闭。若翻译尚未结束就关闭，会同时中断正在进行的请求，已翻出的部分不再保留。
 
 ### prompt_template
 
-模板中的 `{target_lang}` 和 `{input_text}` 会分别替换为目标语言与选中文本。示例文件给出的是通用模板，适用于大多数指令模型：
+顶层的 `prompt_template` 是**默认提示词**，模型未单独写 `prompt_template` 时用它。模板中的 `{target_lang}` 和 `{input_text}` 会分别替换为目标语言与选中文本。示例文件给出的是通用模板，适用于大多数指令模型：
 
 ```text
 将以下文本翻译为 {target_lang}，注意只需要输出翻译后的结果，不要额外解释：{input_text}
@@ -116,7 +160,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 <｜hy_begin▁of▁sentence｜>你是一个翻译助手，专门将输入的文本翻译成{target_lang}。<｜hy_place▁holder▁no▁3｜><｜hy_User｜>{input_text}<｜hy_Assistant｜>
 ```
 
-**注意**：`prompt_template` 需与所用模型匹配，模板不匹配会明显影响翻译质量。
+**注意**：`prompt_template` 需与所用模型匹配，模板不匹配会明显影响翻译质量。若不同模型需要不同模板，在对应模型里单独写 `prompt_template` 覆盖默认值即可。
 
 ## 部署模型与配置 Ollama
 
