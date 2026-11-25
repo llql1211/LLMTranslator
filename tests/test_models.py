@@ -124,6 +124,104 @@ def test_invalid_platforms_or_models_raise(tmp_path, build_config, extra, messag
         main.load_config(path)
 
 
+def test_extra_body_is_merged_into_openai_payload(make_app, build_config):
+    """模型 extra_body 原样合并进 OpenAI 兼容请求体"""
+    app = make_app(
+        build_config()
+        + '''
+[[platforms]]
+name = "paratera"
+base_url = "https://cloud.example.com"
+api_key = "sk-test"
+
+[[models]]
+name = "cloud"
+platform = "paratera"
+model_name = "cloud-model"
+extra_body = { thinking = { type = "disabled" }, custom_flag = 7 }
+'''
+    )
+
+    payload = app.build_request("hello", stream=True)[1]
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["custom_flag"] == 7
+    assert payload["model"] == "cloud-model"
+    assert payload["stream"] is True
+
+
+def test_extra_body_cannot_override_core_fields(make_app, build_config):
+    """核心请求字段优先于 extra_body，避免配置写错破坏请求"""
+    app = make_app(
+        build_config()
+        + '''
+[[platforms]]
+name = "paratera"
+base_url = "https://cloud.example.com"
+api_key = "sk-test"
+
+[[models]]
+name = "cloud"
+platform = "paratera"
+model_name = "cloud-model"
+extra_body = { model = "wrong", messages = [], stream = false }
+'''
+    )
+
+    payload = app.build_request("hello", stream=True)[1]
+    assert payload["model"] == "cloud-model"
+    assert payload["messages"] == [{"role": "user", "content": "把 hello 翻译成 Chinese"}]
+    assert payload["stream"] is True
+
+
+def test_extra_body_ignored_for_ollama(make_app, build_config):
+    """extra_body 是 OpenAI 兼容字段，Ollama 原生格式不应带上"""
+    app = make_app(
+        build_config()
+        + '''
+[[platforms]]
+name = "ollama"
+base_url = "http://localhost:11434/api/generate"
+api_key = ""
+
+[[models]]
+name = "local"
+platform = "ollama"
+model_name = "local-model"
+extra_body = { thinking = { type = "disabled" } }
+'''
+    )
+
+    payload = app.build_request("hello", stream=True)[1]
+    assert "thinking" not in payload
+    assert payload["prompt"] == "把 hello 翻译成 Chinese"
+
+
+def test_invalid_extra_body_raises(tmp_path, build_config):
+    """extra_body 不是键值表时应报配置错误"""
+    import main
+
+    path = tmp_path / "config.toml"
+    path.write_text(
+        build_config()
+        + '''
+[[platforms]]
+name = "paratera"
+base_url = "https://cloud.example.com"
+api_key = "sk-test"
+
+[[models]]
+name = "cloud"
+platform = "paratera"
+model_name = "cloud-model"
+extra_body = "not a table"
+''',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(main.ConfigError, match="extra_body 必须是键值表"):
+        main.load_config(path)
+
+
 def test_legacy_flat_config_still_works(make_app, build_config):
     """旧的扁平配置仍可加载，等价一个默认平台上的默认模型"""
     app = make_app(build_config())

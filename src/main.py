@@ -56,6 +56,9 @@ TARGET_LANG = config_data["target_lang"]
 # 模型未写提示词时，用顶层默认提示词兜底
 PROMPT_TEMPLATE = active_model.get("prompt_template") or config_data["prompt_template"]
 
+# 模型自定义的额外请求字段（如关闭 thinking），仅 OpenAI 兼容格式生效
+EXTRA_BODY = active_model.get("extra_body", {})
+
 HOTKEY_TRANSLATE = config_data["hotkey_translate"]
 HOTKEY_QUIT = config_data["hotkey_quit"]
 
@@ -199,6 +202,7 @@ def _api_settings() -> api.ApiSettings:
         prompt_template=PROMPT_TEMPLATE,
         target_lang=TARGET_LANG,
         generation_params=GENERATION_PARAMS,
+        extra_params=EXTRA_BODY,
     )
 
 

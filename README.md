@@ -58,7 +58,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 | 字段 | 说明 | 模板默认值 |
 | :--- | :--- | :--- |
 | `platforms` | **必填**。平台列表，每档含 `name`、`base_url`、`api_key`，见下方「平台与模型」 | 见模板 |
-| `models` | **必填**。模型列表，每个含 `name`、`platform`、`model_name` 及可选的 `prompt_template` | 见模板 |
+| `models` | **必填**。模型列表，每个含 `name`、`platform`、`model_name`，以及可选的 `prompt_template`、`extra_body` | 见模板 |
 | `active_model` | 当前使用的模型名称；留空则用第一个模型 | `example-cloud` |
 | `target_lang` | 目标语言 | `Chinese` |
 | `prompt_template` | **默认提示词**：模型未写自己的提示词时用它兜底，可用 `{target_lang}` 和 `{input_text}` 占位符 | （见下方） |
@@ -90,6 +90,7 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 - `platform`：依赖的平台名，必须是上面已有的平台
 - `model_name`：实际传给 API 的模型名称
 - `prompt_template`（可选）：该模型专用提示词，不写则用顶层默认提示词
+- `extra_body`（可选）：附加到 OpenAI 兼容请求体的字段，比如 `extra_body = { thinking = { type = "disabled" } }` 可关闭思考、缩短等待；Ollama 原生格式忽略此项。核心字段（`model`/`messages`/`stream`）不会被它覆盖
 
 ```toml
 active_model = "cloud"
@@ -108,6 +109,7 @@ api_key = ""
 name = "cloud"
 platform = "paratera"
 model_name = "my-model"
+extra_body = { thinking = { type = "disabled" } }
 
 [[models]]
 name = "local"

@@ -28,6 +28,8 @@ class ApiSettings:
     prompt_template: str
     target_lang: str
     generation_params: dict[str, Any]
+    # 模型配置里的 extra_body，仅对 OpenAI 兼容格式生效
+    extra_params: dict[str, Any]
 
 
 def chat_completions_url(base_url: str) -> str:
@@ -61,6 +63,8 @@ def build_request(text: str, stream: bool, settings: ApiSettings) -> tuple[str, 
             "Content-Type": "application/json"
         }
         payload = {
+            # 模型自定义的额外请求字段（如 thinking 开关），核心字段优先于它
+            **settings.extra_params,
             "model": settings.model_name,
             "messages": [{"role": "user", "content": prompt}],
             "stream": stream,

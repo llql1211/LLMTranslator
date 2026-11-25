@@ -54,6 +54,8 @@ name = "example-cloud"
 platform = "example-paratera"
 model_name = ""
 # prompt_template = "该模型专用提示词：{input_text}"
+# extra_body 会原样合并进 OpenAI 兼容请求体（Ollama 原生格式忽略）。
+# 例如关闭思考、缩短等待：extra_body = { thinking = { type = "disabled" } }
 
 [[models]]
 name = "example-local"

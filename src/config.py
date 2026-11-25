@@ -112,6 +112,8 @@ def resolve_active_model(config: dict) -> dict:
     for model in models:
         if model["platform"] not in platform_by_name:
             raise ConfigError(f"模型 {model['name']} 引用了不存在的平台：{model['platform']}")
+        if "extra_body" in model and not isinstance(model["extra_body"], dict):
+            raise ConfigError(f"模型 {model['name']} 的 extra_body 必须是键值表")
 
     active = config.get("active_model")
     if active:
@@ -129,6 +131,7 @@ def resolve_active_model(config: dict) -> dict:
         "api_key": platform.get("api_key", ""),
         "model_name": selected["model_name"],
         **({"prompt_template": selected["prompt_template"]} if "prompt_template" in selected else {}),
+        **({"extra_body": selected["extra_body"]} if "extra_body" in selected else {}),
     }
 
 
