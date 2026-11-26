@@ -19,7 +19,7 @@ from pynput import keyboard, mouse
 import pyperclip
 import requests
 
-import api, clipboard, hotkeys, text, ui
+import api, clipboard, credentials, hotkeys, text, ui
 from logger import Timer, error, info, report, shorten, warn
 from config import (
     CONFIG_EXAMPLE_PATH,
@@ -52,7 +52,8 @@ ACTIVE_MODEL_NAME = active_model["name"]
 ACTIVE_PLATFORM_NAME = active_model["platform"]
 
 API_BASE_URL = active_model["base_url"]
-API_KEY = active_model.get("api_key", "")
+# 密钥存在用户数据目录的独立文件里，配置里的同名字段仅作旧配置兜底
+API_KEY = credentials.resolve_api_key(ACTIVE_PLATFORM_NAME, active_model.get("api_key", ""))
 MODEL_NAME = active_model["model_name"]
 
 TARGET_LANG = config_data["target_lang"]

@@ -5,9 +5,12 @@
     python src/cli.py show
     python src/cli.py get target_lang
     python src/cli.py set target_lang Japanese
-    python src/cli.py set platforms.example-ollama.api_key sk-xxx
+    python src/cli.py set-key example-cloud sk-xxx
+    python src/cli.py set-key example-cloud        # 省略值时从 stdin 读取
 
-修改采用逐行替换，保留原文件中的注释与排版；键不存在时自动补写。
+普通配置采用逐行替换，保留原文件中的注释与排版；键不存在时自动补写。
+密钥单独存到用户数据目录（见 credentials.py），不写入 config.toml；
+平台下的 api_key 字段若仍写在配置里，仅作为旧配置兜底。
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import sys
 import tomllib
 
 import config
+import credentials
 
 _HEADER_ARRAY = re.compile(r"^\s*\[\[([A-Za-z0-9_-]+)\]\]\s*$")
 _HEADER_SINGLE = re.compile(r"^\s*\[([A-Za-z0-9_-]+)\]\s*$")
@@ -33,6 +37,19 @@ def _format_value(value: object, key: str = "") -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+def _masked_key(value: str) -> str:
+    """密钥状态：只说有没有，不回显内容"""
+    return "****** (已隐藏)" if value else "(未设置)"
+
+
+def _platform_api_key_name(dotted_key: str) -> str | None:
+    """识别 platforms.<平台名>.api_key，返回平台名；其他键返回 None"""
+    parts = dotted_key.split(".")
+    if len(parts) == 3 and parts[0] == "platforms" and parts[2] == "api_key":
+        return parts[1]
+    return None
 
 
 def _lookup(cfg: dict, dotted_key: str) -> object:
@@ -244,6 +261,14 @@ def show_config(path: str) -> None:
         f"（平台 {active['platform']}，模型名 {active['model_name']}）"
     )
 
+    print(f"\n密钥文件：{credentials.resolve_credentials_path()}")
+    stored = credentials.load_credentials()
+    if stored:
+        for name, value in stored.items():
+            print(f"  {name} = {_masked_key(value)}")
+    else:
+        print("  （尚未保存密钥，可用 set-key 命令添加）")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="查看与修改 LLMTranslator 配置")
@@ -255,6 +280,9 @@ def build_parser() -> argparse.ArgumentParser:
     set_parser = sub.add_parser("set", help="修改配置项")
     set_parser.add_argument("key", help="配置键")
     set_parser.add_argument("value", help="新值；未加引号的文本按字符串处理")
+    key_parser = sub.add_parser("set-key", help="把平台密钥保存到独立密钥文件（不写入 config.toml）")
+    key_parser.add_argument("platform", help="平台名，如 example-cloud")
+    key_parser.add_argument("value", nargs="?", help="密钥；省略则从标准输入读取，避免留在命令历史里")
     # 子命令后也能写 -c，用 SUPPRESS 避免覆盖前面已解析出的值
     for command in (show, get, set_parser):
         command.add_argument("-c", "--config", default=argparse.SUPPRESS, help="指定配置文件路径")
@@ -268,9 +296,32 @@ def main(argv: list[str] | None = None) -> int:
         if args.command in (None, "show"):
             show_config(path)
         elif args.command == "get":
-            value = _lookup(config.load_config(path), args.key)
-            print(_format_value(value, args.key.split(".")[-1]))
+            platform = _platform_api_key_name(args.key)
+            if platform is not None:
+                try:
+                    legacy = _lookup(config.load_config(path), args.key)
+                except KeyError:
+                    legacy = ""  # 新配置已不在 config.toml 里保存密钥
+                effective = credentials.resolve_api_key(
+                    platform, legacy if isinstance(legacy, str) else ""
+                )
+                print(_masked_key(effective))
+            else:
+                value = _lookup(config.load_config(path), args.key)
+                print(_format_value(value, args.key.split(".")[-1]))
+        elif args.command == "set-key":
+            value = args.value if args.value is not None else sys.stdin.read().strip()
+            target = credentials.save_credential(args.platform, value)
+            print(f"已保存 {args.platform} 的密钥到 {target}（值不回显）")
         else:
+            platform = _platform_api_key_name(args.key)
+            if platform is not None:
+                credentials.save_credential(platform, args.value)
+                print(
+                    f"已将 {platform} 的密钥写入独立密钥文件（值不回显）。"
+                    "如 config.toml 里仍有 api_key 行，建议删除。"
+                )
+                return 0
             before, after = set_value(path, args.key, args.value)
             field = args.key.split(".")[-1]
             print(f"已修改 {args.key}：{_format_value(before, field)} → {_format_value(after, field)}")

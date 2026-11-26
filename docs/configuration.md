@@ -1,6 +1,6 @@
 # 配置参考
 
-所有配置集中在 `data/config.toml`。该文件含 API 密钥，不纳入版本管理；首次使用请复制模板：
+普通配置集中在 `data/config.toml`；**API 密钥不放在该文件里**，而是单独存到用户数据目录的密钥文件中（见下文）。首次使用请复制模板：
 
 ```bash
 copy data\config.example.toml data\config.toml   # Windows
@@ -9,11 +9,37 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 
 模板中每一项都有简要注释。平台与模型分开配置，模型通过 `platform` 引用平台。也可以用命令行修改，见 [README 的命令行配置](../README.md#命令行配置)。
 
+## 密钥存储
+
+密钥保存在仓库之外的独立文件，默认路径：
+
+- Windows：`%APPDATA%\LLMTranslator\credentials.toml`
+- macOS：`~/Library/Application Support/LLMTranslator/credentials.toml`
+- Linux：`~/.config/llmtranslator/credentials.toml`
+
+可用环境变量 `LLMTRANSLATOR_CREDENTIALS` 指定其他位置。文件是普通 TOML，形状如下（值为明文，请不要提交或分享）：
+
+```toml
+[platforms]
+paratera = "sk-xxx"
+```
+
+用命令行写入，密钥不会出现在配置文件里，也不会回显到终端：
+
+```bash
+pixi run config set-key paratera sk-xxx
+pixi run config set-key paratera          # 省略值时从标准输入读取，避免留在命令历史
+```
+
+`pixi run config show` 只显示密钥文件位置与「已隐藏 / 未设置」状态。程序启动时才把密钥与配置在内存里合并；只有拿到了密钥的平台才会走 OpenAI 兼容格式，没拿到密钥的走 Ollama 原生格式。
+
+兼容旧配置：如果 `config.toml` 的平台里仍写着 `api_key`，程序会在密钥文件没有登记该平台时沿用旧值。建议执行 `set-key` 后把配置里的 `api_key` 行删掉。
+
 ## 完整字段
 
 | 字段 | 说明 | 模板默认值 |
 | :--- | :--- | :--- |
-| `platforms` | **必填**。平台列表，每项含 `name`、`base_url`、`api_key` | 见模板 |
+| `platforms` | **必填**。平台列表，每项含 `name`、`base_url`；密钥另存密钥文件 | 见模板 |
 | `models` | **必填**。模型列表，每项含 `name`、`platform`、`model_name`，可选 `prompt_template`、`extra_body` | 见模板 |
 | `active_model` | 当前模型名，留空则用第一个模型 | `example-cloud` |
 | `target_lang` | 目标语言 | `Chinese` |
@@ -56,9 +82,9 @@ cp data/config.example.toml data/config.toml     # Linux/macOS
 
 平台字段（`[[platforms]]`）：
 
-- `name`：平台名，供模型引用，不可重复
-- `base_url`：API 地址。`api_key` 为空时填 Ollama 的 `/api/generate` 地址；非空时填服务根地址即可，程序自动补全 `/v1/chat/completions`。建议用 `https`，避免 http→https 重定向导致 405
-- `api_key`：密钥，留空则走 Ollama 原生格式
+- `name`：平台名，供模型引用，不可重复；也是密钥文件里的索引键
+- `base_url`：API 地址。没有密钥时填 Ollama 的 `/api/generate` 地址；有密钥时填服务根地址即可，程序自动补全 `/v1/chat/completions`。建议用 `https`，避免 http→https 重定向导致 405
+- `api_key`：**不再写入配置**。用 `pixi run config set-key <平台名> <密钥>` 保存到密钥文件；未保存密钥则走 Ollama 原生格式
 
 模型字段（`[[models]]`）：
 
@@ -74,12 +100,10 @@ active_model = "cloud"
 [[platforms]]
 name = "paratera"
 base_url = "https://api.example.com"
-api_key = "sk-xxx"
 
 [[platforms]]
 name = "ollama"
 base_url = "http://localhost:11434/api/generate"
-api_key = ""
 
 [[models]]
 name = "cloud"
@@ -93,6 +117,8 @@ platform = "ollama"
 model_name = "hy-mt"
 prompt_template = "专用提示词：{input_text}"
 ```
+
+上例还要执行 `pixi run config set-key paratera sk-xxx` 保存密钥，该平台才会走 OpenAI 兼容格式。
 
 > `[[platforms]]` 与 `[[models]]` 是 TOML 表格数组，必须放在文件末尾、先平台后模型且不能交叉，否则其后的配置项会被归入最后一个表格。
 
@@ -115,7 +141,7 @@ prompt_template = "专用提示词：{input_text}"
 
 - 热键解析只支持**标准修饰键（`ctrl`、`shift`、`alt`、`cmd`）+ 单个可打印字符**，不支持功能键、方向键或多键组合；详见 `parse_hotkey()` 与 `_matches_key()`。
 - 热键请勿与其他软件冲突，例如 VSCode 默认用 `Ctrl+Shift+C` 打开终端。
-- 若当前模型引用的平台 `api_key` 非空，请求会自动切换为 OpenAI 兼容格式。
+- 若当前模型引用的平台在密钥文件里有非空密钥（或旧配置里仍写着非空 `api_key`），请求会自动切换为 OpenAI 兼容格式。
 - 结果弹窗点击外部或按 `Esc` 关闭。若翻译未结束就关闭，会中断请求，已翻出的部分不再保留。
 
 提示词模板的写法与模型配套选择见 [模型与提示词](models.md)。

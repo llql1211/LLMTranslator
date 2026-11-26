@@ -8,6 +8,7 @@ import pytest
 
 import cli
 import config
+import credentials
 
 CONFIG = '''# 配置注释
 target_lang = "Chinese"  # 目标语言
@@ -185,3 +186,65 @@ def test_unsupported_value_type_is_rejected(config_path, capsys):
 
     assert read(config_path) == original
     assert "不支持的配置值类型" in capsys.readouterr().err
+
+
+# ===== 密钥独立存储 =====
+
+
+@pytest.fixture
+def credentials_path(tmp_path, monkeypatch):
+    path = tmp_path / "credentials.toml"
+    monkeypatch.setenv(credentials.CREDENTIALS_PATH_ENV_VAR, str(path))
+    return str(path)
+
+
+def test_set_key_writes_credentials_file_only(config_path, credentials_path, capsys):
+    original = read(config_path)
+
+    assert cli.main(["set-key", "cloud", "sk-new"]) == 0
+
+    out = capsys.readouterr().out
+    assert "sk-new" not in out
+    assert credentials.load_credentials(credentials_path) == {"cloud": "sk-new"}
+    assert read(config_path) == original  # 配置文件不被改动
+
+
+def test_set_key_reads_value_from_stdin(config_path, credentials_path, monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("sk-from-stdin\n"))
+
+    assert cli.main(["set-key", "cloud"]) == 0
+
+    assert credentials.load_credentials(credentials_path) == {"cloud": "sk-from-stdin"}
+    assert "sk-from-stdin" not in capsys.readouterr().out
+
+
+def test_set_platform_api_key_redirects_to_credentials(config_path, credentials_path, capsys):
+    original = read(config_path)
+
+    assert cli.main(["-c", config_path, "set", "platforms.cloud.api_key", "sk-via-set"]) == 0
+
+    assert "sk-via-set" not in capsys.readouterr().out
+    assert credentials.load_credentials(credentials_path) == {"cloud": "sk-via-set"}
+    assert read(config_path) == original
+
+
+def test_get_api_key_masks_effective_value(config_path, credentials_path, capsys):
+    credentials.save_credential("cloud", "sk-hidden", credentials_path)
+
+    assert cli.main(["-c", config_path, "get", "platforms.cloud.api_key"]) == 0
+
+    out = capsys.readouterr().out.strip()
+    assert out == "****** (已隐藏)"
+    assert "sk-hidden" not in out
+    assert "sk-secret" not in out  # 配置里的旧值也不回显
+
+
+def test_show_reports_credentials_file(config_path, credentials_path, capsys):
+    credentials.save_credential("cloud", "sk-hidden", credentials_path)
+
+    assert cli.main(["-c", config_path, "show"]) == 0
+
+    out = capsys.readouterr().out
+    assert credentials_path in out
+    assert "cloud = ****** (已隐藏)" in out
+    assert "sk-hidden" not in out

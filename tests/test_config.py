@@ -234,12 +234,12 @@ def test_example_config_declares_font_settings():
 
 
 def test_example_config_keeps_required_fields_blank():
-    """模板中第一个平台的地址/密钥与第一个模型的名称应留空，由使用者填写"""
+    """模板中第一个平台的地址与第一个模型的名称应留空，密钥不写入配置"""
     with open(EXAMPLE_CONFIG_PATH, "rb") as f:
         example = tomllib.load(f)
 
     assert example["platforms"][0]["base_url"] == ""
-    assert example["platforms"][0]["api_key"] == ""
+    assert "api_key" not in example["platforms"][0]
     assert example["models"][0]["model_name"] == ""
 
 

@@ -22,6 +22,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 CONFIG_ENV_VAR = "LLMTRANSLATOR_CONFIG"
+CREDENTIALS_ENV_VAR = "LLMTRANSLATOR_CREDENTIALS"
 
 # 测试用配置，字段含义见 data/config.example.toml
 BASE_CONFIG_VALUES: dict[str, object] = {
@@ -73,6 +74,8 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="llmtranslator-tests-"))
 _SESSION_CONFIG = _TMP_DIR / "config.toml"
 _SESSION_CONFIG.write_text(DEFAULT_CONFIG, encoding="utf-8")
 os.environ[CONFIG_ENV_VAR] = str(_SESSION_CONFIG)
+# 测试不读写真实用户的密钥文件，统一指向临时目录
+os.environ[CREDENTIALS_ENV_VAR] = str(_TMP_DIR / "credentials.toml")
 
 
 @pytest.fixture(scope="session", autouse=True)

@@ -41,17 +41,17 @@ hotkey_quit = "<ctrl>+<shift>+q"
 restore_clipboard = false    # 翻译后是否恢复剪切板
 
 # ===== 平台与模型（表格数组放在末尾，先平台后模型） =====
+# 密钥不写在配置文件里：pixi run config set-key 平台名 密钥
+# 密钥保存在用户数据目录的独立文件中，详见 docs/configuration.md
 active_model = "example-cloud"
 
 [[platforms]]
 name = "example-paratera"
-base_url = ""          # api_key 非空时填服务根地址，自动补全 /v1/chat/completions
-api_key = ""
+base_url = ""          # 有密钥时填服务根地址，自动补全 /v1/chat/completions
 
 [[platforms]]
 name = "example-ollama"
-base_url = "http://localhost:11434/api/generate"  # api_key 留空时填此原生地址
-api_key = ""
+base_url = "http://localhost:11434/api/generate"  # 无需密钥时填此原生地址
 
 [[models]]
 name = "example-cloud"

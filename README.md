@@ -54,9 +54,11 @@
 pixi run config show                     # 查看全部配置（密钥自动遮蔽）
 pixi run config get target_lang          # 读取单个配置项
 pixi run config set theme dark           # 修改配置项，重启后生效
+pixi run config set-key 平台名 密钥       # 密钥存到用户数据目录，不写入 config.toml
+pixi run config set-key 平台名           # 省略密钥时从标准输入读取，避免留在命令历史
 ```
 
-不用 pixi 时把 `pixi run config` 换成 `python src/cli.py`。
+密钥单独存在仓库外，配置文件里不再出现 `api_key`，详见[配置参考](docs/configuration.md#密钥存储)。不用 pixi 时把 `pixi run config` 换成 `python src/cli.py`。
 
 ## 许可证
 
