@@ -66,6 +66,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          PYTHONIOENCODING: utf-8
         run: |
           cat > .release_notes.py <<'PY'
           import os
@@ -76,7 +77,7 @@ jobs:
           pyproject = tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))
           actual = pyproject["project"]["version"]
           if actual != version:
-              raise SystemExit(f"pyproject 版本 {actual} 与标签版本 {version} 不一致")
+              raise SystemExit(f"pyproject version {actual} does not match tag {version}")
 
           lines = pathlib.Path("docs/CHANGELOG.md").read_text(encoding="utf-8").splitlines()
           start = next(
@@ -84,16 +85,16 @@ jobs:
               None,
           )
           if start is None:
-              raise SystemExit(f"CHANGELOG 缺少 v{version} 的版本节")
+              raise SystemExit(f"CHANGELOG has no section for v{version}")
           end = next(
               (i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")),
               len(lines),
           )
           notes = "\n".join(lines[start + 1 : end]).strip()
           if not notes:
-              raise SystemExit(f"v{version} 的版本说明为空")
+              raise SystemExit(f"release notes for v{version} are empty")
           pathlib.Path("release-body.md").write_text(notes + "\n", encoding="utf-8")
-          print(f"已生成 v{version} 的发布说明")
+          print(f"release notes generated for v{version}")
           PY
           pixi run python .release_notes.py
           rm -f .release_notes.py
