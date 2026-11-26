@@ -1,6 +1,6 @@
 [project]
 name = "LLMTranslator"
-version = "0.2.0"
+version = "0.3.0"
 description = "利用 LLM 翻译选中文本，并在鼠标光标处弹窗显示结果"
 readme = "README.md"
 requires-python = ">=3.14.6,<3.15"
